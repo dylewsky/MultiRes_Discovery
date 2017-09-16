@@ -128,6 +128,6 @@ for j = 1:size(uv,1)
 %     writeVideo(vidw,getframe());
 end
 % close(vidw);
-save gray_scott_movie.m movie_frames;
+save gray_scott_movie.mat movie_frames;
 
 
