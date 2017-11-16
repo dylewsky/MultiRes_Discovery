@@ -1,3 +1,7 @@
 *.avi
 *.mat
 *.asv
+*.pdf
+/SINDy_utils/*
+/Optimized DMD/*
+/Tao Example/altmany-export_fig-9ac0917/*

@@ -70,6 +70,8 @@ x_PoT = x(:,1:nSteps);
 t_PoT = TimeSpan(1:nSteps);
 %res_list: [pn, level #, nSplit, sampleSteps/nSplit]
 
+dupShift = 0.02; %multiplier to shift duplicate values so they can be visually distinguished
+
 for q = 1:size(res_list,1)
     figure('units','pixels','Position',[100 100 1200 400])
     j = res_list(q,2);
@@ -96,14 +98,31 @@ for q = 1:size(res_list,1)
         Omega = mr_res{pn,j,k}.Omega;
         t = mr_res{pn,j,k}.t;
         tShift = t-t(1); %compute each segment of xr starting at "t = 0"
+        t_nudge = 5;
+        
+        rankDefFlag = 0;
+        for bi = 1:length(b)
+            if b(bi) == 0
+                w(:,bi) = zeros(size(w,1),1);
+                rankDefFlag = 1;
+            end
+        end
         
         % Plot |omega|^2 spectrum
         om_sq = conj(Omega).*Omega;
+        for oi = 1:length(om_sq)
+            for oj = oi:length(om_sq)
+                if (abs(om_sq(oi)-om_sq(oj))/((om_sq(oi)+om_sq(oj))/2)) <= dupShift && (oi ~= oj)
+                    om_sq(oi) = om_sq(oi)*(1-dupShift);
+                    om_sq(oj) = om_sq(oj)*(1+dupShift);
+                end
+            end
+        end
         om_window_spec = repmat(om_sq, 1, steps_per_window);
         om_spec(:,(k-1)*steps_per_window+1:k*steps_per_window) = om_window_spec;
         
         subplot(plotDims(1),plotDims(2),plotDims(2)-3);
-        p_om_sq = plot(t,om_window_spec,'LineWidth',2);
+        p_om_sq = semilogy(t,om_window_spec,'LineWidth',3);
 %         title(['Frequency Spectrum for ' num2str(steps_per_window) '-Step Window']);
         xlabel('t')
         xlim([t_PoT(1) t_PoT(end)]);
@@ -112,11 +131,19 @@ for q = 1:size(res_list,1)
         
         % Plot |Im[omega]| spectrum
         omIm = abs(imag(Omega));
+        for oi = 1:length(omIm)
+            for oj = oi:length(omIm)
+                if (abs(omIm(oi)-omIm(oj))/((omIm(oi)+omIm(oj))/2)) <= dupShift && (oi ~= oj)
+                    omIm(oi) = omIm(oi)*(1-dupShift);
+                    omIm(oj) = omIm(oj)*(1+dupShift);
+                end
+            end
+        end
         omIm_window_spec = repmat(omIm, 1, steps_per_window);
         omIm_spec(:,(k-1)*steps_per_window+1:k*steps_per_window) = omIm_window_spec;
         
         subplot(plotDims(1),plotDims(2),plotDims(2)-2);
-        p_om_im = plot(t,omIm_window_spec,'LineWidth',2);
+        p_om_im = semilogy(t,omIm_window_spec,'LineWidth',3);
 %         title(['Frequency Spectrum for ' num2str(steps_per_window) '-Step Window']);
         xlabel('t')
         xlim([t_PoT(1) t_PoT(end)]);
@@ -144,7 +171,11 @@ for q = 1:size(res_list,1)
         
 %         scrollsubplot(plotDims(1),plotDims(2),plotDims(2)*q-1:plotDims(2)*q);
         subplot(plotDims(1),plotDims(2),plotDims(2)-1:plotDims(2));
-        p_xr = plot(t,real(xr_window),'LineWidth',2);
+        if rankDefFlag == 0
+            p_xr = plot(t,real(xr_window),'LineWidth',2);
+        else
+            p_xr = plot(t,real(xr_window),'-.','LineWidth',1);
+        end
         title([num2str(steps_per_window) '-Step Window (Frequencies ~' num2str(1/(steps_per_window*(t(2)-t(1)))) ' Hz)']);
         xlabel('t')
         xlim([t_PoT(1) t_PoT(end)]);
