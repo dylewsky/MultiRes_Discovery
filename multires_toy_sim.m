@@ -1,7 +1,7 @@
 clear all; close all; clc
 
 %% Initial Definitions
-tspan = 0:1:3500;
+tspan = 0:1:200;
 nx = 64;
 ny = nx;
 n = nx*ny;

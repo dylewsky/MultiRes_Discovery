@@ -1,0 +1,3 @@
+function out = my_d2x(in)
+  out = -in ...
+      + .50*(circshift(in,[ 1, 0]) + circshift(in,[-1, 0]));
