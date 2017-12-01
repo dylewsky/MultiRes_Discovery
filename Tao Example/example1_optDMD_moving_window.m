@@ -5,57 +5,38 @@ addpath(genpath(fullfile('..','Optimized DMD','optdmd-master')));
 load('raw_data.mat');
 
 r = size(x,1); %rank to fit w/ optdmd
-imode = 1;
+imode = 1; %parameter for optdmd code
 %  imode = 1, fit full data, slower
 %  imode = 2, fit data projected onto first r POD modes
 %      or columns of varargin{2} (should be at least r
 %      columns in varargin{2})
-nLevels = 5;
+
+windows = 2.^(9:0.5:14);
+nLevels = length(windows);
 nVars = size(x,1);
-nSteps = 2^14;
-downScale = 3; %different-sized data sets will be built from blocks of size nSteps/2^downScale
+nSteps = 2^15; %truncation size of full data
 
-if mod(nSteps * 2^(-downScale) * 2^(-(nLevels-1)),2) ~= 0
-    print('Error: nSteps not sufficiently divisible by 2')
-    return;
-end
+stepSize = 2^6;
 
-primeList = primes(2^downScale);
-primeList = [primeList(2:end) 2^downScale]; %remove superfluous 2 and add 2^downScale
+nSlide = floor((nSteps-windows)/stepSize);
 
-mr_res = cell(length(primeList),nLevels,2^(nLevels-1));
-res_list = [];
-for pn = 1:length(primeList)
-    sampleSteps = nSteps * primeList(pn) / 2^(downScale);
-    xSample = x(:,1:sampleSteps);
-    tSample = TimeSpan(1:sampleSteps);
-    
-    nHold = 0;
+mrw_res = cell(nLevels,max(nSlide));
 
-    for n = 1:nLevels
-        nSplit = 2^(n-1);
-        xL = reshape(xSample, nVars, sampleSteps/nSplit, nSplit);
-        tL = reshape(tSample, 1, sampleSteps/nSplit, nSplit);
+for lv = 1:nLevels
+    for k = 1:nSlide(lv)
+        sampleStart = stepSize*(k-1) + 1;
+        sampleSteps = sampleStart : sampleStart + windows(lv);
+        xSample = x(:,sampleSteps);
+        tSample = TimeSpan(sampleSteps);
         
-        res_list = [res_list; pn, n, nSplit, sampleSteps/nSplit];
-        for k = 1:nSplit
-            xT = xL(:,:,k);
-            tT = tL(:,:,k);
-            mr_res{pn,n,k}.x = xT;
-            mr_res{pn,n,k}.t = tT;
-            [w, e, b] = optdmd(xT,tT,r,imode);
-%             Omega = log(diag(e))/(TimeSpan(2) - TimeSpan(1));
-            mr_res{pn,n,k}.w = w;
-            mr_res{pn,n,k}.Omega = e;
-            mr_res{pn,n,k}.b = b;
-%             mr_res{pn,n,k}.Omega = Omega;
-        end
-    %     nHold = input('Subtract off how many modes?')
+        mrw_res{lv,k}.x = xSample;
+        mrw_res{lv,k}.t = tSample;
+        [w, e, b] = optdmd(xSample,tSample,r,imode);
+        mrw_res{lv,k}.w = w;
+        mrw_res{lv,k}.Omega = e;
+        mrw_res{lv,k}.b = b;
     end
 end
-
-% mr_res_stack = reshape(mr_res,length(primeList)*nLevels*2^(nLevels-1),1,1);
-res_list = sortrows(res_list,4,'descend');
 
 
 %% Cluster Frequencies
