@@ -186,8 +186,18 @@ end
 x_proj_hf = avg_modes_hf.' * x_full;
 
 figure
-plot(t_full,x_full,'k:',t_full,x_proj_hf,'r-','LineWidth',2)
-
-
-
-
+subplot(3,1,1)
+p_hf_raw = plot(t_full,x_full,'LineWidth',2);
+xlim([t_full(1),t_full(end)]);
+title('Measurement Data')
+legend('x_1','x_2','x_3','x_4','Location','eastoutside');
+subplot(3,1,2)
+p_hf_recon_re = plot(t_full,real(x_proj_hf),'LineWidth',2);
+xlim([t_full(1),t_full(end)]);
+title('Projection onto Avg. HF Modes (Real)')
+legend('Re[b_1(t)]','Re[b_2(t)]','Location','eastoutside');
+subplot(3,1,3)
+p_hf_recon_im = plot(t_full,imag(x_proj_hf),'LineWidth',2);
+xlim([t_full(1),t_full(end)]);
+title('Projection onto Avg. HF Modes (Imag.)')
+legend('Im[b_1(t)]','Im[b_2(t)]','Location','eastoutside');
