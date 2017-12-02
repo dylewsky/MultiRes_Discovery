@@ -24,6 +24,7 @@ mrw_res = cell(nLevels,max(nSlide));
 
 for lv = 1:nLevels
     for k = 1:nSlide(lv)
+        disp(lv,k);
         sampleStart = stepSize*(k-1) + 1;
         sampleSteps = sampleStart : sampleStart + windows(lv);
         xSample = x(:,sampleSteps);
@@ -41,81 +42,91 @@ end
 
 %% Cluster Frequencies
 close all;
-if exist('mr_res','var') == 0
-    load('mr_res.mat');
-    load('res_list.mat');
+if exist('mrw_res','var') == 0
+    load('mrw_res.mat');
+end
+
+mrw_nz = zeros(nLevels, max(nSlide)); % tracks which cells have a real run associated with them
+for lv = 1:nLevels
+    for k = 1:nSlide(lv)
+        mrw_nz(lv,k) = 1;
+    end
 end
 
 nComponents = 2;
-nBins = 64;
+% nBins = 64;
 
-gmmList = cell(size(res_list,1),1);
-for q = 1:size(res_list,1)
-% for q = 16
-    j = res_list(q,2);
-    pn = res_list(q,1);
-    nSplit = 2^(j-1);
-    sampleSteps = nSteps * primeList(pn) / 2^(downScale);
-    steps_per_window = sampleSteps/nSplit;
-    om_spec = zeros(nVars,sampleSteps);
-    
+gmmList = cell(nLevels,1);
+kMeansList = cell(nLevels,1);
+for lv = 1:nLevels
+% for lv = 1:1
     all_om = [];
-    
-    for k = 1:nSplit
-%         w = mr_res{pn,j,k}.w;
-%         b = mr_res{pn,j,k}.b;
-        Omega = mr_res{pn,j,k}.Omega;
+    for k = 1:nSlide(lv)
+        if mrw_nz(lv,k) == 0
+            continue
+        end
+        Omega = mrw_res{lv,k}.Omega;
         all_om = [all_om; Omega];
     end
+
+    all_om_sq = sort(conj(all_om) .* all_om);
+    all_om_sq = all_om_sq(1:floor(0.99*length(all_om_sq))); %remove top 1% as outliers
     
+    [idx,clustCents,clustSumD,clustDists] = kmeans(all_om_sq,nComponents);
     
-    
-    all_om_sq = conj(all_om) .* all_om;
-    
-    log_om_sq = log(all_om_sq);
-    
-    
-    try
-        gmm = fitgmdist(all_om_sq,nComponents);
-    catch ME
-        continue
-    end
-    gmeans = gmm.mu;
-    [~,sortInd] = sort(gmeans);
-    gmmList{q}.gmm = gmm;
-    gmmList{q}.sortInd = sortInd;
-%     figure
-%     subplot(1,2,1)
-    
-%     subplot(1,2,2)
-%     histogram(log_om_sq,nBins);
-%     xlabel('log(|\omega|^2)');
-    confList = [];
-    for k = 1:nSplit
-        omega = mr_res{pn,j,k}.Omega;
+    [~,sortInd] = sort(clustCents);
+    kMeansList{lv}.idx = idx;
+    kMeansList{lv}.clustCents = clustCents;
+    kMeansList{lv}.clustSumD = clustSumD;
+    kMeansList{lv}.clustDists = clustDists;
+    kMeansList{lv}.sortInd = sortInd;
+
+    mean_clust_dist = 0;
+    for k = 1:nSlide
+        if mrw_nz(lv,k) == 0
+            continue
+        end
+        omega = mrw_res{lv,k}.Omega;
         om_sq = omega.*conj(omega);
-%         om_class = zeros(size(om_sq));
-%         for m = 1:length(omega)
-%             likelihoods = zeros(nComponents,1);
-%             for g = 1:nComponents
-%                 likelihoods(g) = gmm.ComponentProportion(g) * normpdf(om_sq(m), gmm.mu(g), gmm.Sigma(g));
-%             end
-%             [~,om_class(m)] = max(likelihoods);
-%         end
-        clust_res = cluster(gmm, om_sq);
-        om_class = sortInd(clust_res);
-        post_res = posterior(gmm, om_sq);
-        om_post = post_res(:,sortInd);
-        mr_res{pn,j,k}.om_class = om_class;
-        mr_res{pn,j,k}.om_post = om_post;
-        confList = [confList; max(om_post,[],2)];
+        
+        om_sq_dist_compare = abs(repmat(om_sq,1,nComponents) - repmat(clustCents.',length(om_sq),1));
+        [om_sq_dist,om_sq_clust] = min(om_sq_dist_compare,[],2);
+        
+        om_class = sortInd(om_sq_clust);
+        om_mean_dist = norm(om_sq_dist);
+        mean_clust_dist = mean_clust_dist + om_mean_dist;
+        mrw_res{lv,k}.om_class = om_class;
+        mrw_res{lv,k}.om_post = om_mean_dist;
     end
-    fit_conf = sum(confList)/length(confList);
-    gmmList{q}.fit_conf = fit_conf;
-    save('mr_res.mat', 'mr_res');
-    save('res_list.mat', 'res_list');
-    
+    mean_clust_dist = mean_clust_dist/nSlide(lv);
+    kMeansList{lv}.mean_clust_dist = mean_clust_dist;
 end
+
+save('mrw_res.mat', 'mrw_res');    
+
+% 
+% 
+% %%
+% for lv = 3
+%     all_om = [];
+%     for k = 1:nSlide(lv)
+%         if mrw_nz(lv,k) == 0
+%             continue
+%         end
+%         Omega = mrw_res{lv,k}.Omega;
+%         all_om = [all_om; Omega];
+%     end
+%     all_om_sq = sort(conj(all_om) .* all_om);
+%     all_om_sq = all_om_sq(1:floor(0.99*length(all_om_sq))); %remove top 1% as outliers
+%     histogram(all_om_sq,64)
+% end
+% 
+% %%
+% all_dists = zeros(nLevels,1);
+% for lv = 1:nLevels
+%     all_dists(lv) = kMeansList{lv}.mean_clust_dist;
+% end
+% semilogy(windows,all_dists)
 
 %% Plot MultiRes Results
 close all;
