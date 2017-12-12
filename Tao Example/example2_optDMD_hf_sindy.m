@@ -4,14 +4,14 @@ addpath('../SINDy_utils');
 
 load('hf_sindy_data_2.mat');
 
-x = hf_bt;
+x = hf_bt(:,isnan(hf_bt(1,:))==0);
 nVars = size(x,1);
 orig_norms = zeros(nVars,1);
 for j = 1:nVars
     orig_norms(j) = norm(x(j,:));
     x(j,:) = x(j,:)/norm(x(j,:)); %normalize so b(t) and db/dt have equal magnitudes
 end
-TimeSpan = t_full.';
+TimeSpan = t_full(isnan(hf_bt(1,:))==0).';
 
 polyorder = 3;
 usesine = 0;
@@ -44,7 +44,7 @@ Theta = poolData(x,n,polyorder,usesine);
 m = size(Theta,2);
 
 %% compute Sparse regression: sequential least squares
-lambdas = 10.^(3 : 0.1 : 4.5);
+lambdas = 10.^(4.5 : 0.1 : 5.5);
 coeff_cts = zeros(size(lambdas));
 for lj = 1:length(lambdas)
     testLambda = lambdas(lj);
@@ -57,7 +57,7 @@ title({'Tuning the Sparseness Parameter', '(Sparse Galerkin Regression)'});
 xlabel('\lambda');
 ylabel('# Nonzero Coefficients');
 grid on
-lambda = lambdas(9);      % lambda is our sparsification knob.
+lambda = lambdas(5);      % lambda is our sparsification knob.
 Xi = sparsifyDynamics(Theta,dx,lambda,n)
 
 

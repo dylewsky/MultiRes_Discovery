@@ -147,10 +147,11 @@ for q = 1:size(res_list,1)
     end
     fit_conf = sum(confList)/length(confList);
     gmmList{q}.fit_conf = fit_conf;
-    save('mr_res_2.mat', 'mr_res');
-    save('res_list_2.mat', 'res_list');
     
 end
+save('mr_res_2.mat', 'mr_res');
+save('res_list_2.mat', 'res_list');
+save('gmm_list_2.mat', 'gmmList');
 
 %% Plot MultiRes Results
 close all;
@@ -237,8 +238,13 @@ for q = 1:size(res_list,1)
         b = mr_res{pn,j,k}.b;
         Omega = mr_res{pn,j,k}.Omega;
         
-        if isempty(gmmList{q}) == 0
+%         if isempty(gmmList{q}) == 0
+%             om_class = mr_res{pn,j,k}.om_class;
+%         end
+        try
             om_class = mr_res{pn,j,k}.om_class;
+        catch ME
+            continue
         end
         t = mr_res{pn,j,k}.t;
         tShift = t-t(1); %compute each segment of xr starting at "t = 0"

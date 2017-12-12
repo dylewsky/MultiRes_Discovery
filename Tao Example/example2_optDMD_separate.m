@@ -77,17 +77,17 @@ subplot(2,1,1)
 pRaw = cell(nVars,1);
 pRecon = cell(nVars,1);
 for ip = 1:nVars
-    pRaw{ip} = plot(t_full,x_full(ip,:),'k','LineWidth',2);
+    pRaw{ip} = plot(t_full,x_full(ip,:),'k','LineWidth',1);
     hold on
-    pRecon{ip} = plot(t_full,real(xr_full(ip,:)),'g','LineWidth',2);
+    pRecon{ip} = plot(t_full,real(xr_full(ip,:)),'g','LineWidth',1);
 end
 subplot(2,1,2)
 pHF = cell(nVars,1);
 pLF = cell(nVars,1);
 for ip = 1:nVars
-    pHF{ip} = plot(t_full,real(xr_hf_full(ip,:)),'r','LineWidth',2);
+    pHF{ip} = plot(t_full,real(xr_hf_full(ip,:)),'r','LineWidth',1);
     hold on
-    pLF{ip} = plot(t_full,real(xr_lf_full(ip,:)),'b','LineWidth',2);
+    pLF{ip} = plot(t_full,real(xr_lf_full(ip,:)),'b','LineWidth',1);
 end
 
 for k = 1:nSplit %plot dotted lines between time splits
@@ -109,17 +109,26 @@ legend([pHF{1},pLF{1}],{'HF Recon.','LF Recon'},'Location','best')
 %% Cluster HF Modes
 rank_hf = 2; %rank of hf dynamics
 allModes = [];
+goodSplits = zeros(nSplit,1); %track which windows successfully yielded 2 hf modes
 for k = 1:nSplit
     w = hf_res{k}.w;
-    allModes = [allModes w];
+    if (size(w,2) == rank_hf) & (isnan(w) == 0)
+        allModes = [allModes w];
+        goodSplits(k) = 1;
+    end
 end
 allModes = [real(allModes); imag(allModes)].'; %separate real and imag for gmm
 % hf_mode_gmm = fitgmdist(allModes,rank_hf);
 
 [idx,~,~,clustDists] = kmeans(allModes,rank_hf);
 clustLabels = zeros(rank_hf,nSplit);
+splitCount = 0;
 for k = 1:nSplit %sort modes in each window so all windows match up
-    windDists = clustDists(rank_hf*(k-1)+1:rank_hf*k,:); %each row is that mode's distance to each of the centroids
+    if goodSplits(k) == 0
+        continue
+    end
+    splitCount = splitCount + 1; %just count non-error windows
+    windDists = clustDists(rank_hf*(splitCount-1)+1:rank_hf*splitCount,:); %each row is that mode's distance to each of the centroids
     [~,naiveClass] = min(windDists,[],2);
     if length(unique(naiveClass)) == length(naiveClass)
         clustLabels(:,k) = naiveClass;
@@ -172,10 +181,17 @@ end
 sorted_modes_hf = cell(rank_hf,nSplit);
 avg_modes_hf = zeros(nVars,rank_hf);
 for k = 1:nSplit
+    if goodSplits(k) == 0
+        continue
+    end
     w = hf_res{k}.w;
     b = hf_res{k}.b;
     Omega = hf_res{k}.Omega;
     t = hf_res{k}.t;
+    
+    if isempty(w)
+        continue
+    end
     
     w_sorted = w(:,clustLabels(:,k));
     
@@ -187,8 +203,10 @@ for k = 1:nSplit
         sorted_modes_hf{j,k} = w_sorted(:,j);
         avg_modes_hf(:,j) = avg_modes_hf(:,j) + w_sorted(:,j);
     end
+    disp(k)
+    disp(avg_modes_hf)
 end
-avg_modes_hf = avg_modes_hf/nSplit;
+avg_modes_hf = avg_modes_hf/nnz(goodSplits);
 
 for j = 1:rank_hf %normalize
     avg_modes_hf(:,j) = avg_modes_hf(:,j)/norm(avg_modes_hf(:,j));
@@ -198,27 +216,38 @@ x_proj_hf = avg_modes_hf.' * x_full;
 
 figure
 subplot(3,1,1)
-p_hf_raw = plot(t_full,x_full,'LineWidth',2);
+p_hf_raw = plot(t_full,x_full,'LineWidth',1);
 xlim([t_full(1),t_full(end)]);
 title('Measurement Data')
 legend('x_1','x_2','x_3','x_4','Location','eastoutside');
 subplot(3,1,2)
-p_hf_recon_re = plot(t_full,real(x_proj_hf),'LineWidth',2);
+p_hf_recon_re = plot(t_full,real(x_proj_hf),'LineWidth',1);
 xlim([t_full(1),t_full(end)]);
 title('Projection onto Avg. HF Modes (Real)')
 legend('Re[b_1(t)]','Re[b_2(t)]','Location','eastoutside');
 subplot(3,1,3)
-p_hf_recon_im = plot(t_full,imag(x_proj_hf),'LineWidth',2);
+p_hf_recon_im = plot(t_full,imag(x_proj_hf),'LineWidth',1);
 xlim([t_full(1),t_full(end)]);
 title('Projection onto Avg. HF Modes (Imag.)')
 legend('Im[b_1(t)]','Im[b_2(t)]','Location','eastoutside');
 
 %% Compute (Windowed) Projections onto HF Modes
 rank_hf = 2;
+window_size = size(hf_res{1}.x,2);
+nGoodWind = nnz(goodSplits);
+% b_hf_comb = zeros(1,nGoodWind*window_size);
+% b_hf_comb_dt = zeros(1,nGoodWind*window_size);
 b_hf_comb = zeros(1,nSteps);
 b_hf_comb_dt = zeros(1,nSteps);
-window_size = size(hf_res{1}.x,2);
+% t_good = zeros(1,nGoodWind*window_size);
+splitCount = 0;
 for k = 1:nSplit
+    if goodSplits(k) == 0
+        b_hf_comb_dt((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
+        b_hf_comb((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
+        continue
+    end
+    splitCount = splitCount + 1;
     x = hf_res{k}.x;
     w = hf_res{k}.w;
     t = hf_res{k}.t;
@@ -238,6 +267,7 @@ for k = 1:nSplit
 
 %     b_comb = w_sorted_comb.' * x;
     b_comb = real(sum(bt)); %real() is just to strip off any errant imaginary residue
+%     b_hf_comb((splitCount-1)*window_size + 1 : splitCount*window_size) = b_comb;
     b_hf_comb((k-1)*window_size + 1 : k*window_size) = b_comb;
     
     b_comb_dt = zeros(size(b_comb));
@@ -245,21 +275,22 @@ for k = 1:nSplit
     b_comb_dt(1) = (b_comb(2) - b_comb(1))/(t(2)-t(1));
     b_comb_dt(end) = (b_comb(end) - b_comb(end-1))/(t(2)-t(1));
 
+%     b_hf_comb_dt((splitCount-1)*window_size + 1 : splitCount*window_size) = b_comb_dt;
     b_hf_comb_dt((k-1)*window_size + 1 : k*window_size) = b_comb_dt;
 
-    
+    t_good((splitCount-1)*window_size + 1 : splitCount*window_size) = t;
     %     disp(w_sorted)
 %     disp([abs(w_sorted(:,1)) abs(w_sorted(:,2))])
 end
 figure
 subplot(2,1,1)
-plot(t_full,b_hf_comb,'LineWidth',2);
+plot(t_full,b_hf_comb,'LineWidth',1);
 hold on
 xlim([t_full(1),t_full(end)]);
 title('Combined b_{HF}(t)')
 hold on
 subplot(2,1,2)
-plot(t_full,b_hf_comb_dt,'LineWidth',2);
+plot(t_full,b_hf_comb_dt,'LineWidth',1);
 hold on
 xlim([t_full(1),t_full(end)]);
 title('\partial_t b_{HF}(t)')
@@ -269,13 +300,13 @@ hold on
 % hold on
 % plot(t_full,3*sin(testom*t_full).^2,'k')
 
-for k = 1:nSplit %plot dotted lines between time splits
-    t = hf_res{k}.t;
-    subplot(2,1,1);
-    plot([t(end) t(end)],get(gca, 'YLim'),'k:')
-    subplot(2,1,2);
-    plot([t(end) t(end)],get(gca, 'YLim'),'k:')
-end
+% for k = 1:nSplit %plot dotted lines between time splits
+%     t = hf_res{k}.t;
+%     subplot(2,1,1);
+%     plot([t(end) t(end)],get(gca, 'YLim'),'k','LineWidth',0.5)
+%     subplot(2,1,2);
+%     plot([t(end) t(end)],get(gca, 'YLim'),'k','LineWidth',0.5)
+% end
 
 hf_bt = [b_hf_comb; b_hf_comb_dt];
-save('hf_sindy_data_2.mat','hf_bt','t_full','w_sorted_comb')
+save('hf_sindy_data_2.mat','hf_bt','t_good','t_full','goodSplits','w_sorted_comb')
