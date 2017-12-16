@@ -10,12 +10,22 @@ n = size(x,1);
 
 h = TimeSpan(2)-TimeSpan(1);
 
+%% Get Window Split Times
+load('res_list.mat')
+sepTrial = 16;
+
+windSize = res_list(sepTrial,4);
+nSplit = res_list(sepTrial,3);
+nSteps = length(TimeSpan);
+wEndList = windSize:windSize:(nSplit-1)*windSize;
+wEndList = fliplr(wEndList);
+
 %% compute Derivative 
 xfull = x;
 TimeSpanFull = TimeSpan;
 clear('TimeSpan')
 x = x(:,3:end-3);
-tspan = TimeSpanFull(3:end-3);
+tspan = TimeSpanFull;
 dx = zeros(size(x));
 for j=1:size(x,2)
     jf = j + 3;
@@ -23,6 +33,24 @@ for j=1:size(x,2)
 %     dx(:,j) = (1/(2*h)) * (xfull(:,jf+1) - xfull(:,jf-1));
 end
 % dx = dx + eps*randn(size(dx));   % add noise
+
+x = [zeros(n,2) x zeros(n,3)]; %re-add beginning & end steps for index sanity
+dx = [zeros(n,2) dx zeros(n,3)];
+
+for endStep = wEndList
+    x(:,endStep-3:endStep+3) = [];
+    dx(:,endStep-3:endStep+3) = [];
+    tspan(endStep-3:endStep+3) = [];
+end
+
+%re-remove padding @ beginning and end
+x(:,1:2) = [];
+x(:,end-2:end) = [];
+dx(:,1:2) = [];
+dx(:,end-2:end) = [];
+tspan(1:2) = [];
+tspan(end-2:end) = [];
+
 
 x = x.';
 dx = dx.';

@@ -135,6 +135,7 @@ for q = 1:size(res_list,1)
     save('res_list.mat', 'res_list');
     
 end
+save('gmm_list.mat', 'gmmList')
 
 %% Plot MultiRes Results
 close all;
@@ -152,11 +153,12 @@ x_PoT = x(:,1:nSteps);
 t_PoT = TimeSpan(1:nSteps);
 %res_list: [pn, level #, nSplit, sampleSteps/nSplit]
 
-dupShift = 0.02; %multiplier to shift duplicate values so they can be visually distinguished
+dupShift = 0.0; %multiplier to shift duplicate values so they can be visually distinguished
 
 nBins = 64;
 
 for q = 1:size(res_list,1)
+% for q = 16
     figure('units','pixels','Position',[100 100 1200 400])
     j = res_list(q,2);
     pn = res_list(q,1);
