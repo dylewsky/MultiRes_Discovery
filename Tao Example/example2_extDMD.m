@@ -20,7 +20,7 @@ stringLib = repmat(stringLib, 1, nVars);
 nFeat = size(x,1);
 
 % r = nVars; %rank to fit w/ optdmd
-r = 2*nVars;
+r = nVars;
 
 imode = 1;
 %  imode = 1, fit full data, slower
@@ -55,6 +55,9 @@ end
 res_list = sortrows(res_list,4,'descend');
 
 res_list = res_list(11:2:19,:);
+
+om_thresh_pct = 0.90;
+
 
 %% Execute OptDMD
 mr_res = cell(size(res_list,1),max(res_list(:,3))); % # parameter combinations * # of window splits
@@ -96,7 +99,6 @@ close all;
 nComponents = 2;
 nBins = 64;
 
-om_thresh_pct = 0.90;
 
 gmmList = cell(size(res_list,1),1);
 for q = 1:size(res_list,1)
@@ -175,13 +177,14 @@ for q = 1:size(res_list,1)
 end
 save('mr_res_2_ext.mat', 'mr_res');
 save('res_list_2_ext.mat', 'res_list');
-save('gmm_list_2_ext.mat', 'gmmList');
+save('gmm_list_2_ext.mat', 'gmmList', 'nComponents');
 
 %% Plot MultiRes Results
 close all;
 if exist('mr_res','var') == 0
     load('mr_res_2_ext.mat');
     load('res_list_2_ext.mat');
+    load('gmm_list_2_ext.mat');
 end
 
 export_result = 0;
