@@ -1,0 +1,108 @@
+\documentclass[11pt,reqno]{amsart}
+\usepackage{geometry}                % See geometry.pdf to learn the layout options. There are lots.
+\geometry{letterpaper}                   % ... or a4paper or a5paper or ... 
+%\geometry{landscape}                % Activate for for rotated page geometry
+%\usepackage[parfill]{parskip}    % Activate to begin paragraphs with an empty line rather than an indent
+\usepackage{graphicx}
+\usepackage{amssymb}
+\usepackage[all]{xy}
+\usepackage{epstopdf}
+\usepackage{color}
+\DeclareGraphicsRule{.tif}{png}{.png}{`convert #1 `dirname #1`/`basename #1 .tif`.png}
+
+
+% these packages make it easy to include figures in the text. 
+\usepackage{float}
+\restylefloat{figure}
+% newcommand
+
+\begin{document}
+Transformation:
+\begin{equation}
+\begin{split}
+x_1 &= a + b\\
+x_2 &= r\cos\theta\\
+y_1 &= r\sin\theta\\
+y_2 &= -a + b^3
+\end{split}
+\end{equation}
+Derivative of transformation:
+\begin{equation}
+\begin{split}
+\dot{x}_1 &= \dot{a} +\dot{b}\\
+\dot{x}_2 &= \dot{r}\cos\theta -  r\dot{\theta}\sin\theta\\
+\dot{y}_1 &= \dot{r}\sin\theta +  r\dot{\theta}\cos\theta\\
+\dot{y}_2 &= -\dot{a} + 3b^2\dot{b}
+\end{split}
+\end{equation}
+Dynamics:
+\begin{equation}
+\begin{split}
+\dot{x}_1 &= x_2\\
+\dot{x}_2 &= -y_1^2x_1^3\\
+\dot{y}_1 &= y_2\\
+\dot{y}_2 &= -\epsilon^{-1}y_1 - \delta y_1^3
+\end{split}
+\end{equation}
+Transformed dynamics:
+\begin{equation}
+\begin{split}
+\dot{a} +\dot{b} &=  r\cos\theta\\
+\dot{r}\cos\theta -  r\dot{\theta}\sin\theta &= -\left( r\sin\theta\right)^2( a + b)^3\\
+\dot{r}\sin\theta +  r\dot{\theta}\cos\theta&=  -a + b^3\\
+-\dot{a} + 3b^2\dot{b} &= -\epsilon^{-1}\left( r\sin\theta\right) - \delta \left( r\sin\theta\right)^3
+\end{split}
+\end{equation}
+Solve for $\dot{a},\dot{b},\dot{r},\dot{\theta}$:
+%\begin{equation}
+%\begin{split}
+%\dot{b} + 3b^2\dot{b} &=  r\cos\theta -\epsilon^{-1}\left( r\sin\theta\right) - \delta \left( r\sin\theta\right)^3\\
+%\dot{b}&= \frac{ r\cos\theta -\epsilon^{-1}r\sin\theta - \delta \left( r\sin\theta\right)^3}{1+3b^2}\\
+%\end{split}
+%\end{equation}
+%
+%\begin{equation}
+%\begin{split}
+%\dot{a} &= r\cos\theta - \frac{ r\cos\theta -\epsilon^{-1}r\sin\theta - \delta \left( r\sin\theta\right)^3}{1+3b^2}\\
+%&= \frac{ 3b^2 r\cos\theta  +\epsilon^{-1}r\sin\theta + \delta \left( r\sin\theta\right)^3}{1+3b^2}\\
+%\end{split}
+%\end{equation}
+%
+%\begin{equation}
+%\begin{split}
+%\dot{r} -  r\dot{\theta}\tan\theta &= -\frac{\left( r\sin\theta\right)^2( a + b)^3}{\cos\theta}\\
+%\dot{r} +  r\dot{\theta}\cot\theta&=  \frac{-a + b^3}{\sin\theta}\\
+%\end{split}
+%\end{equation}
+%\begin{equation}
+%\begin{split}
+% r\dot{\theta}\left(\cot\theta +\tan\theta\right)  &=  \frac{-a + b^3}{\sin\theta} + \frac{\left( r\sin\theta\right)^2( a + b)^3}{\cos\theta}\\
+% r\dot{\theta}\left(\frac{\cos^2\theta}{\sin\theta\cos\theta} +\frac{\sin^2\theta}{\sin\theta\cos\theta}\right)  &=  \frac{-a + b^3}{\sin\theta} + \frac{\left( r\sin\theta\right)^2( a + b)^3}{\cos\theta}\\
+%\dot{\theta}\left(\frac{r}{\sin\theta\cos\theta}\right)  &=  \frac{-a + b^3}{\sin\theta} + \frac{\left( r\sin\theta\right)^2( a + b)^3}{\cos\theta}\\
+%\dot{\theta} &= \left(\frac{\sin\theta\cos\theta}{r}\right)  \left( \frac{-a + b^3}{\sin\theta} + \frac{\left( r\sin\theta\right)^2( a + b)^3}{\cos\theta}\right)\\
+%&= \left(\frac{1}{r}\right)  \left[\left( -a + b^3\right)\cos\theta + \left( r\sin\theta\right)^2( a + b)^3\sin\theta\right]\\
+%&= \frac{\left( -a + b^3\right)\cos\theta + r^2\sin^3\theta( a + b)^3}{r}\\
+%\end{split}
+%\end{equation}
+%
+%\begin{equation}
+%\begin{split}
+%\dot{r} &=  \frac{-a + b^3}{\sin\theta} -  \left[\left( -a + b^3\right)\cos\theta + r^2\sin^3\theta( a + b)^3\right]\cot\theta\\
+%&=  \frac{-a + b^3}{\sin\theta} -  \left[\left( -a + b^3\right)\frac{\cos^2\theta}{\sin\theta} + r^2\sin^2\theta\cos\theta( a + b)^3\right]\\
+%&=  \frac{\left( -a + b^3\right)}{\sin\theta}\left(1-\cos^2\theta\right) - r^2\sin^2\theta\cos\theta( a + b)^3\\
+%&= \left( -a + b^3\right)\sin\theta - r^2\sin^2\theta\cos\theta( a + b)^3\\
+%&=\sin\theta\left( \left( -a + b^3\right) - r^2\sin\theta\cos\theta( a + b)^3\right)\\
+%\end{split}
+%\end{equation}
+
+\begin{equation}
+\begin{split}
+\dot{a} &= \frac{ 3b^2 r\cos\theta  +\epsilon^{-1}r\sin\theta + \delta \left( r\sin\theta\right)^3}{1+3b^2}\\
+\dot{b}&= \frac{ r\cos\theta -\epsilon^{-1}r\sin\theta - \delta \left( r\sin\theta\right)^3}{1+3b^2}\\
+\dot{r} &=\sin\theta\left( \left( -a + b^3\right) - r^2\sin\theta\cos\theta( a + b)^3\right)\\
+\dot{\theta} &= \frac{\left( -a + b^3\right)\cos\theta + r^2\sin^3\theta( a + b)^3}{r}\\
+\end{split}
+\end{equation}
+
+
+\end{document}  
