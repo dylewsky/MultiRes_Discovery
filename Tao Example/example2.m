@@ -1,8 +1,4 @@
-clc;
-
-clear;
-
-
+clc; clear; close all;
 
 %% parameters
 
@@ -188,8 +184,9 @@ save('raw_data_2.mat','x','TimeSpan')
 
 %%
 figure
-plot(TimeSpan,x,'b')
+plot(TimeSpan,x,'b', 'LineWidth', 1.5)
 hold on
 load('raw_data.mat')
-plot(TimeSpan,x,'k')
-
+plot(TimeSpan,x,'k', 'LineWidth', 1.5)
+xlim([TimeSpan(1) TimeSpan(end)])
+title('Linear (Black) vs. Nonlinear (Blue)')

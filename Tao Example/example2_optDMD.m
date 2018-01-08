@@ -11,6 +11,7 @@ imode = 1;
 %      or columns of varargin{2} (should be at least r
 %      columns in varargin{2})
 nLevels = 5;
+nComponents = 2;
 nVars = size(x,1);
 nSteps = 2^17;
 downScale = 6; %different-sized data sets will be built from blocks of size nSteps/2^downScale
@@ -24,6 +25,8 @@ primeList = primes(2^downScale);
 primeList = [primeList(2:end) 2^downScale]; %remove superfluous 2 and add 2^downScale
 
 primeList = primeList(end-4:end); %don't need to go to smallest sample sizes w/ such a long time series input
+
+%% OptDMD
 
 mr_res = cell(length(primeList),nLevels,2^(nLevels-1));
 res_list = [];
@@ -72,7 +75,6 @@ if exist('mr_res','var') == 0
     load('res_list.mat');
 end
 
-nComponents = 2;
 nBins = 64;
 
 gmmList = cell(size(res_list,1),1);
@@ -159,6 +161,12 @@ close all;
 export_result = 0;
 logScale = 0;
 
+if ~exist('res_list','var')
+    load('res_list_2.mat');
+    load('gmm_list_2.mat');
+    load('mr_res_2.mat');
+end
+
 % figure('units','pixels','Position',[0 0 1366 2*768])
 
 % plotDims = [3 4]; %rows, columns of plot grid on screen at a given time
@@ -173,7 +181,8 @@ dupShift = 0.02; %multiplier to shift duplicate values so they can be visually d
 
 nBins = 64;
 
-for q = 1:size(res_list,1)
+% for q = 1:size(res_list,1)
+for q = [4 11 17]
     figure('units','pixels','Position',[100 100 1200 400])
     j = res_list(q,2);
     pn = res_list(q,1);

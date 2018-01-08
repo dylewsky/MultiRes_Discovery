@@ -73,7 +73,7 @@ Theta = poolData(x,n,polyorder,usesine);
 m = size(Theta,2);
 
 %% compute Sparse regression: sequential least squares
-lambdas = 10.^(3 : 0.1 : 4.8);
+lambdas = 10.^(2 : 0.2 : 4.8);
 coeff_cts = zeros(size(lambdas));
 for lj = 1:length(lambdas)
     testLambda = lambdas(lj);
@@ -124,10 +124,13 @@ legend('True x_1','True x_2','Identified')
 stringLib = libStringsFixed(nVars,polyorder,usesine).';
 stringLib = repmat(stringLib, 1, nVars);
 
-coeffsUsed = Xi(Xi~=0);
-stringLibUsed = stringLib(Xi~=0);
-for j = 1:length(coeffsUsed)
-    disp([num2str(coeffsUsed(j)) ' ' stringLibUsed{j}]);
+for nd = 1:nVars
+    disp(['\dot{x' num2str(nd) '} = '])
+    coeffsUsed = Xi(Xi(:,nd)~=0,nd);
+    stringLibUsed = stringLib(Xi(:,nd)~=0,nd);
+    for j = 1:length(coeffsUsed)
+        disp([num2str(coeffsUsed(j)) ' ' stringLibUsed{j}]);
+    end
 end
 
 %%

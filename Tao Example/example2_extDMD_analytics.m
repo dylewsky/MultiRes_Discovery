@@ -3,7 +3,7 @@ load('mr_res_2_ext.mat');
 qBest = 5;
 nSplit = 128;
 r = length(mr_res{qBest,1}.Omega);
-nFeat = size(mr_res{qBest,q}.x,1);
+nFeat = size(mr_res{qBest,1}.x,1);
 
 allModes = zeros(nFeat,r,nSplit);
 

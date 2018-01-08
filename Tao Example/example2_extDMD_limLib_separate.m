@@ -139,8 +139,8 @@ for k = 1:nSplit %sort modes in each window so all windows match up
     hf_done = 0;
     lf_done = 0;
     splitCount = splitCount + 1; %just count non-error windows
-    windDists_hf = clustDists(rank_hf*(splitCount-1)+1:rank_hf*splitCount,:); %each row is that mode's distance to each of the centroids
-    windDists_lf = clustDists(rank_lf*(splitCount-1)+1:rank_lf*splitCount,:);
+    windDists_hf = clustDists_hf(rank_hf*(splitCount-1)+1:rank_hf*splitCount,:); %each row is that mode's distance to each of the centroids
+    windDists_lf = clustDists_lf(rank_lf*(splitCount-1)+1:rank_lf*splitCount,:);
     [~,naiveClass_hf] = min(windDists_hf,[],2);
     [~,naiveClass_lf] = min(windDists_lf,[],2);
     if length(unique(naiveClass_hf)) == length(naiveClass_hf)
@@ -262,7 +262,7 @@ for k = 1:nSplit
         continue
     end
     
-    w_sorted = w(:,clustLabels(:,k));
+    w_sorted = w(:,clustLabels_hf(:,k));
     
     %compute time-series projections onto hf modes
     bt = diag(b)*exp(Omega*t);
@@ -285,7 +285,7 @@ for k = 1:nSplit
         continue
     end
     
-    w_sorted = w(:,clustLabels(:,k));
+    w_sorted = w(:,clustLabels_lf(:,k));
     
     %compute time-series projections onto lf modes
     bt = diag(b)*exp(Omega*t);
