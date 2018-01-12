@@ -9,3 +9,8 @@
 /2D Steady Navier-Stokes/*
 /Navier_Stokes_Simulation/*
 /Koopman Invariant Subspaces/Brunton_Invariant_Manifolds.m
+/Tao Example/Example 2/tdDMD/bin/*
+/Tao Example/Example 2/tdDMD/doc/*
+/Tao Example/Example 2/tdDMD/examples/*
+/Tao Example/Example 2/tdDMD/src/*
+/Tao Example/Example 2/tdDMD/setup.m
