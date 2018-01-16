@@ -71,11 +71,10 @@ res_list = sortrows(res_list,4,'descend');
 %% Cluster Frequencies
 close all;
 if exist('mr_res','var') == 0
-    load('mr_res.mat');
-    load('res_list.mat');
+    load('mr_res_2.mat');
+    load('res_list_2.mat');
 end
 
-nBins = 64;
 
 gmmList = cell(size(res_list,1),1);
 for q = 1:size(res_list,1)
@@ -182,7 +181,7 @@ dupShift = 0.02; %multiplier to shift duplicate values so they can be visually d
 nBins = 64;
 
 % for q = 1:size(res_list,1)
-for q = [4 11 17]
+for q = [16]
     figure('units','pixels','Position',[100 100 1200 400])
     j = res_list(q,2);
     pn = res_list(q,1);

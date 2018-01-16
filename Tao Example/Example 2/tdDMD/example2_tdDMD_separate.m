@@ -3,46 +3,106 @@ load('res_list_2_td.mat');
 load('mr_res_2_td.mat');
 load('../raw_data_2.mat');
 
-sepTrial = 16; %index of trial with window size that successfully separated scales
+sepTrial = 1; %index of trial with window size that successfully separated scales
 lfScale = 1;
 hfScale = 2; % 1 = low-frequency, 2 = high-frequency
 % sepModes = 2; % # of modes 
 r = 8;
+rank_lf = floor(r/2); %rank of hf dynamics
+rank_hf = r - rank_lf;
 delaySteps = 200;
 nDelay = 5;
 
 nVars = size(x,1);
-nSteps = res_list(sepTrial,3) * res_list(sepTrial,4); % # windows * steps per window
+nSteps = res_list(sepTrial,2) * res_list(sepTrial,3); % # windows * steps per window
 
-j = res_list(sepTrial,2);
+nSplit = res_list(sepTrial,2);
 pn = res_list(sepTrial,1);
-nSplit = 2^(j-1);
 
-mr_res_2 = cell(nSplit,1);
-for k = 1:nSplit
-    mr_res_2{k} = mr_res{pn,j,k};
-end
-
-mr_res = mr_res_2;
-clear('mr_res_2');
+% mr_res_2 = cell(nSplit,1);
+% for k = 1:nSplit
+%     mr_res_2{k} = mr_res{pn,j,k};
+% end
+% 
+% mr_res = mr_res_2;
+% clear('mr_res_2');
 
 hf_res = cell(nSplit, 1);
 lf_res = cell(nSplit, 1);
+badSplits = zeros(nSplit,1);
 for k = 1:nSplit
-    om_class = mr_res{k}.om_class;
+    try
+        om_class = mr_res{k}.om_class;
+    catch ME
+        badSplits(k) = 1;
+        continue
+    end
     hf_res{k}.t = mr_res{k}.t;
     hf_res{k}.x = mr_res{k}.x;
     hf_res{k}.w = mr_res{k}.w(:,om_class == hfScale);
     hf_res{k}.Omega = mr_res{k}.Omega(om_class == hfScale);
     hf_res{k}.b = mr_res{k}.b(om_class == hfScale);
-    hf_res{k}.om_post = mr_res{k}.om_post(om_class == hfScale,:);
+%     hf_res{k}.om_post = mr_res{k}.om_post(om_class == hfScale,:);
     
     lf_res{k}.t = mr_res{k}.t;
     lf_res{k}.x = mr_res{k}.x;
     lf_res{k}.w = mr_res{k}.w(:,om_class == lfScale);
     lf_res{k}.Omega = mr_res{k}.Omega(om_class == lfScale);
     lf_res{k}.b = mr_res{k}.b(om_class == lfScale);
-    lf_res{k}.om_post = mr_res{k}.om_post(om_class == lfScale,:);
+%     lf_res{k}.om_post = mr_res{k}.om_post(om_class == lfScale,:);
+end
+
+%% Check content of mr_res
+vModes = zeros(nSplit,r);
+bs = zeros(nSplit,r);
+nb = zeros(nSplit,1);
+omegas = zeros(nSplit,r);
+for k = 1:nSplit
+    if badSplits(k) == 1
+        continue
+    end
+    w = mr_res{k}.w;
+    b = mr_res{k}.b;
+    Omega = mr_res{k}.Omega;
+    bs(k,:) = b;
+    omegas(k,:) = Omega;
+    nb(k) = nnz(b);
+    w = sum(w,1);
+    vModes(k,:) = isnan(w);
+end
+figure
+subplot(1,2,1)
+plot(nb)
+title('# Nonzero Elements of b')
+ylim([0,r])
+subplot(1,2,2)
+omega_b = omegas(1,bs(1,:)~=0);
+omega_nob = omegas(1,bs(1,:)==0);
+plot1 = scatter(real(omega_b),imag(omega_b),'b');
+hold on
+plot2 = scatter(real(omega_nob),imag(omega_nob),'r');
+hold on
+% om_bounds_re = [min(min(real(omegas))) max(max(real(omegas)))];
+% om_bounds_imag = [min(min(imag(omegas))) max(max(imag(omegas)))];
+om_bounds_re = [-10 10];
+om_bounds_imag = [-20 20];
+xlim(om_bounds_re);
+ylim(om_bounds_imag);
+plot(om_bounds_re,[0 0],'k:')
+hold on
+plot([0 0],om_bounds_imag,'k:')
+hold on
+% set(gca,'Color','none');
+% set(gca,'CLim',[0, 1E-4]);
+for k = 1:nSplit
+    omega_b = omegas(k,bs(k,:)~=0);
+    omega_nob = omegas(k,bs(k,:)==0);
+    plot1.XData = real(omega_b); 
+    plot1.YData = imag(omega_b); 
+    plot2.XData = real(omega_nob); 
+    plot2.YData = imag(omega_nob); 
+    % pause 2/10 second: 
+%     pause(0.2)
 end
 
 %% Plot Separated Reconstructions
@@ -59,6 +119,15 @@ xr_lf_full = [];
 for k = 1:nSplit
     t = mr_res{k}.t;
     x = mr_res{k}.x;
+    if badSplits(k) == 1
+        t_full = [t_full t];
+        x_full = [x_full x];
+        xr_full = [xr_full NaN(size(x))];
+        xr_hf_full = [xr_hf_full NaN(size(x))];
+        xr_lf_full = [xr_lf_full NaN(size(x))];
+        continue
+    end
+    c = mr_res{k}.c;
     t_full = [t_full t];
     x_full = [x_full x];
     
@@ -67,19 +136,22 @@ for k = 1:nSplit
     Omega = mr_res{k}.Omega;
     
     bt_window = diag(b)*exp(Omega*t); %time series recon. in mode space
-    xr_window = w*bt_window; %time series recon. in original variables
+    w(isnan(w)) = 0; %modes corresponding to b=0 are set to NaN, change to 0
+    xr_window = w*bt_window + c; %time series recon. in original variables
     xr_full = [xr_full xr_window];
     
     w = hf_res{k}.w;
+    w(isnan(w)) = 0;
     b = hf_res{k}.b;
     Omega = hf_res{k}.Omega;
     xr_hf = w*diag(b)*exp(Omega*t);
     xr_hf_full = [xr_hf_full xr_hf];
     
     w = lf_res{k}.w;
+    w(isnan(w)) = 0;
     b = lf_res{k}.b;
     Omega = lf_res{k}.Omega;
-    xr_lf = w*diag(b)*exp(Omega*t);
+    xr_lf = w*diag(b)*exp(Omega*t) + c; %constant shift is put into lf reconstruction
     xr_lf_full = [xr_lf_full xr_lf];
 end
 
@@ -101,6 +173,9 @@ for ip = 1:nVars
 end
 
 for k = 1:nSplit %plot dotted lines between time splits
+    if badSplits(k) == 1
+        continue
+    end
     t = lf_res{k}.t;
     subplot(2,1,1);
     plot([t(end) t(end)],get(gca, 'YLim'),'k:')
@@ -117,23 +192,29 @@ legend([pHF{1},pLF{1}],{'HF Recon.','LF Recon'},'Location','best')
 
 
 %% Cluster Modes within Freq. Regime
-rank_hf = 4; %rank of hf dynamics
-rank_lf = 4;
 allModes_hf = [];
 allModes_lf = [];
 goodSplits = zeros(nSplit,1); %track which windows successfully yielded (rank_hf) hf modes
 for k = 1:nSplit
-    w = hf_res{k}.w;
-    if (size(w,2) == rank_hf) & (isnan(w) == 0)
-        allModes_hf = [allModes_hf w];
-        goodSplits(k) = goodSplits(k) + 0.5;
+    if badSplits(k) == 1
+        continue
     end
+    w = hf_res{k}.w;
+    w(isnan(w)) = 0;
+    if (size(w,2) == rank_hf)
+        allModes_hf = [allModes_hf w];
+        goodSplits(k) = goodSplits(k) + 0.25;
+    end
+    
     w = lf_res{k}.w;
-    if (size(w,2) == rank_lf) & (isnan(w) == 0)
+    w(isnan(w)) = 0;
+    if (size(w,2) == rank_lf)
         allModes_lf = [allModes_lf w];
-        goodSplits(k) = goodSplits(k) + 0.5;
+        goodSplits(k) = goodSplits(k) + 0.75;
     end
 end
+
+
 allModes_hf = [real(allModes_hf); imag(allModes_hf)].'; %separate real and imag for gmm
 allModes_lf = [real(allModes_lf); imag(allModes_lf)].';
 
@@ -141,115 +222,122 @@ allModes_lf = [real(allModes_lf); imag(allModes_lf)].';
 [idx_lf,~,~,clustDists_lf] = kmeans(allModes_lf,rank_lf);
 clustLabels_hf = zeros(rank_hf,nSplit);
 clustLabels_lf = zeros(rank_lf,nSplit);
-splitCount = 0;
+splitCountLF = 0;
+splitCountHF = 0;
 for k = 1:nSplit %sort modes in each window so all windows match up
-    if goodSplits(k) < 1
+    if goodSplits(k) == 0
         continue
     end
     hf_done = 0;
     lf_done = 0;
-    splitCount = splitCount + 1; %just count non-error windows
-    windDists_hf = clustDists_hf(rank_hf*(splitCount-1)+1:rank_hf*splitCount,:); %each row is that mode's distance to each of the centroids
-    windDists_lf = clustDists_lf(rank_lf*(splitCount-1)+1:rank_lf*splitCount,:);
-    [~,naiveClass_hf] = min(windDists_hf,[],2);
-    [~,naiveClass_lf] = min(windDists_lf,[],2);
-    if length(unique(naiveClass_hf)) == length(naiveClass_hf)
-        clustLabels_hf(:,k) = naiveClass_hf;
-        hf_done = 1;
-%         continue %if all modes have been assigned to different clusters, we're done
-    end
-    if length(unique(naiveClass_lf)) == length(naiveClass_lf)
-        clustLabels_lf(:,k) = naiveClass_lf;
-        lf_done = 1;
-%         continue %if all modes have been assigned to different clusters, we're done
-    end
-    
-    if (hf_done == 1) && (lf_done == 1)
-        continue
-    end
-    
-    windDists_pos_hf = zeros(rank_hf,1);
-    windDists_neg_hf = zeros(rank_hf,1);
-    windDists_pos_lf = zeros(rank_lf,1);
-    windDists_neg_lf = zeros(rank_lf,1);
-    
-    for j = 1:rank_hf
-        windDists_pos_hf(j) = windDists_hf(j,naiveClass_hf(j)); %distances to positively-IDed modes
-        windDists_neg_hf(j) = sqrt(sum(windDists_hf(j,:).^2) - windDists_pos_hf(j).^2); %aggregate distances to negatively-IDed modes
-    end
-    
-    for j = 1:rank_lf
-        windDists_pos_lf(j) = windDists_lf(j,naiveClass_lf(j)); %distances to positively-IDed modes
-        windDists_neg_lf(j) = sqrt(sum(windDists_lf(j,:).^2) - windDists_pos_lf(j).^2); %aggregate distances to negatively-IDed modes
-    end
-    
-    windDists_ratio_hf = windDists_pos_hf./windDists_neg_hf; %lower ratio = better confidence
-    class_ratio_hf = [naiveClass_hf windDists_ratio_hf];
-    
-    windDists_ratio_lf = windDists_pos_lf./windDists_neg_lf; %lower ratio = better confidence
-    class_ratio_lf = [naiveClass_lf windDists_ratio_lf];
-    
-    nDup_hf = length(naiveClass_hf) - length(unique(naiveClass_hf));
-    iter = 0;
-    while nDup_hf > 0
-        iter = iter + 1;
-        for j1 = 1:rank_hf
-            for j2 = 1:rank_hf
-                if ((naiveClass_hf(j1) == naiveClass_hf(j2)) && j1 ~= j2)
-                    if class_ratio_hf(j1) < class_ratio_hf(j2) %kick the lower-confidence classification to a different label
-                        if naiveClass_hf(j2) == rank_hf 
-                            naiveClass_hf(j2) = 1;
-                        else
-                            naiveClass_hf(j2) = naiveClass_hf(j2) + 1;
-                        end
-                    else
-                        if naiveClass_hf(j1) == rank_hf 
-                            naiveClass_hf(j1) = 1;
-                        else
-                            naiveClass_hf(j1) = naiveClass_hf(j1) + 1;
-                        end
-                    end
-                end
-            end
+    if (goodSplits(k) == 1) || (goodSplits(k) == 0.25)
+        splitCountHF = splitCountHF + 1; %just count non-error windows
+        windDists_hf = clustDists_hf(rank_hf*(splitCountHF-1)+1:rank_hf*splitCountHF,:); %each row is that mode's distance to each of the centroids
+
+        [~,naiveClass_hf] = min(windDists_hf,[],2);
+
+        if length(unique(naiveClass_hf)) == length(naiveClass_hf)
+            clustLabels_hf(:,k) = naiveClass_hf;
+            hf_done = 1;
+    %         continue %if all modes have been assigned to different clusters, we're done
         end
+
+
+    %     if (hf_done == 1) && (lf_done == 1)
+    %         continue
+    %     end
+
+        windDists_pos_hf = zeros(rank_hf,1);
+        windDists_neg_hf = zeros(rank_hf,1);
+
+        for j = 1:rank_hf
+            windDists_pos_hf(j) = windDists_hf(j,naiveClass_hf(j)); %distances to positively-IDed modes
+            windDists_neg_hf(j) = sqrt(sum(windDists_hf(j,:).^2) - windDists_pos_hf(j).^2); %aggregate distances to negatively-IDed modes
+        end
+
+        windDists_ratio_hf = windDists_pos_hf./windDists_neg_hf; %lower ratio = better confidence
+        class_ratio_hf = [naiveClass_hf windDists_ratio_hf];
+
         nDup_hf = length(naiveClass_hf) - length(unique(naiveClass_hf));
-        if iter > 100
-            disp('Infinite Loop')
-            break
-        end
-    end
-    clustLabels_hf(:,k) = naiveClass_hf;
-    
-    nDup_lf = length(naiveClass_lf) - length(unique(naiveClass_lf));
-    iter = 0;
-    while nDup_lf > 0
-        iter = iter + 1;
-        for j1 = 1:rank_lf
-            for j2 = 1:rank_lf
-                if ((naiveClass_lf(j1) == naiveClass_lf(j2)) && j1 ~= j2)
-                    if class_ratio_lf(j1) < class_ratio_lf(j2) %kick the lower-confidence classification to a different label
-                        if naiveClass_lf(j2) == rank_lf 
-                            naiveClass_lf(j2) = 1;
+        iter = 0;
+        while nDup_hf > 0
+            iter = iter + 1;
+            for j1 = 1:rank_hf
+                for j2 = 1:rank_hf
+                    if ((naiveClass_hf(j1) == naiveClass_hf(j2)) && j1 ~= j2)
+                        if class_ratio_hf(j1) < class_ratio_hf(j2) %kick the lower-confidence classification to a different label
+                            if naiveClass_hf(j2) == rank_hf 
+                                naiveClass_hf(j2) = 1;
+                            else
+                                naiveClass_hf(j2) = naiveClass_hf(j2) + 1;
+                            end
                         else
-                            naiveClass_lf(j2) = naiveClass_lf(j2) + 1;
-                        end
-                    else
-                        if naiveClass_lf(j1) == rank_lf 
-                            naiveClass_lf(j1) = 1;
-                        else
-                            naiveClass_lf(j1) = naiveClass_lf(j1) + 1;
+                            if naiveClass_hf(j1) == rank_hf 
+                                naiveClass_hf(j1) = 1;
+                            else
+                                naiveClass_hf(j1) = naiveClass_hf(j1) + 1;
+                            end
                         end
                     end
                 end
             end
+            nDup_hf = length(naiveClass_hf) - length(unique(naiveClass_hf));
+            if iter > 100
+                disp('Infinite Loop')
+                break
+            end
         end
-        nDup_lf = length(naiveClass_lf) - length(unique(naiveClass_lf));
-        if iter > 100
-            disp('Infinite Loop')
-            break
-        end
+        clustLabels_hf(:,k) = naiveClass_hf;
     end
-    clustLabels_lf(:,k) = naiveClass_lf;
+    
+    if (goodSplits(k) == 1) || (goodSplits(k) == 0.75)
+        splitCountLF = splitCountLF + 1; %just count non-error windows
+        windDists_lf = clustDists_lf(rank_lf*(splitCountLF-1)+1:rank_lf*splitCountLF,:);
+        [~,naiveClass_lf] = min(windDists_lf,[],2);
+        if length(unique(naiveClass_lf)) == length(naiveClass_lf)
+            clustLabels_lf(:,k) = naiveClass_lf;
+            lf_done = 1;
+    %         continue %if all modes have been assigned to different clusters, we're done
+        end
+        windDists_pos_lf = zeros(rank_lf,1);
+        windDists_neg_lf = zeros(rank_lf,1);
+        for j = 1:rank_lf
+            windDists_pos_lf(j) = windDists_lf(j,naiveClass_lf(j)); %distances to positively-IDed modes
+            windDists_neg_lf(j) = sqrt(sum(windDists_lf(j,:).^2) - windDists_pos_lf(j).^2); %aggregate distances to negatively-IDed modes
+        end
+        windDists_ratio_lf = windDists_pos_lf./windDists_neg_lf; %lower ratio = better confidence
+        class_ratio_lf = [naiveClass_lf windDists_ratio_lf];
+        nDup_lf = length(naiveClass_lf) - length(unique(naiveClass_lf));
+        iter = 0;
+        while nDup_lf > 0
+            iter = iter + 1;
+            for j1 = 1:rank_lf
+                for j2 = 1:rank_lf
+                    if ((naiveClass_lf(j1) == naiveClass_lf(j2)) && j1 ~= j2)
+                        if class_ratio_lf(j1) < class_ratio_lf(j2) %kick the lower-confidence classification to a different label
+                            if naiveClass_lf(j2) == rank_lf 
+                                naiveClass_lf(j2) = 1;
+                            else
+                                naiveClass_lf(j2) = naiveClass_lf(j2) + 1;
+                            end
+                        else
+                            if naiveClass_lf(j1) == rank_lf 
+                                naiveClass_lf(j1) = 1;
+                            else
+                                naiveClass_lf(j1) = naiveClass_lf(j1) + 1;
+                            end
+                        end
+                    end
+                end
+            end
+            nDup_lf = length(naiveClass_lf) - length(unique(naiveClass_lf));
+            if iter > 100
+                disp('Infinite Loop')
+                break
+            end
+        end
+        clustLabels_lf(:,k) = naiveClass_lf;
+    end
 end
 
 sorted_modes_hf = cell(rank_hf,nSplit);
@@ -259,56 +347,60 @@ sorted_modes_lf = cell(rank_lf,nSplit);
 avg_modes_lf = zeros(nVars*nDelay,rank_lf);
 
 for k = 1:nSplit
-    if goodSplits(k) < 1
+    if goodSplits(k) == 0
         continue
     end
     % HF
-    w = hf_res{k}.w;
-    b = hf_res{k}.b;
-    Omega = hf_res{k}.Omega;
-    t = hf_res{k}.t;
-    
-    if isempty(w)
-        continue
-    end
-    
-    w_sorted = w(:,clustLabels_hf(:,k));
-    
-    %compute time-series projections onto hf modes
-    bt = diag(b)*exp(Omega*t);
-    hf_res{k}.bt = bt;
-    
-    for j = 1:rank_hf
-        sorted_modes_hf{j,k} = w_sorted(:,j);
-        avg_modes_hf(:,j) = avg_modes_hf(:,j) + w_sorted(:,j);
-    end
-%     disp(k)
-%     disp(avg_modes_hf)
+    if (goodSplits(k) == 1) || (goodSplits(k) == 0.25)
+        w = hf_res{k}.w;
+        b = hf_res{k}.b;
+        Omega = hf_res{k}.Omega;
+        t = hf_res{k}.t;
 
-    % LF
-    w = lf_res{k}.w;
-    b = lf_res{k}.b;
-    Omega = lf_res{k}.Omega;
-    t = lf_res{k}.t;
-    
-    if isempty(w)
-        continue
+        if isempty(w)
+            continue
+        end
+
+        w_sorted = w(:,clustLabels_hf(:,k));
+
+        %compute time-series projections onto hf modes
+        bt = diag(b)*exp(Omega*t);
+        hf_res{k}.bt = bt;
+
+        for j = 1:rank_hf
+            sorted_modes_hf{j,k} = w_sorted(:,j);
+            avg_modes_hf(:,j) = avg_modes_hf(:,j) + w_sorted(:,j);
+        end
+    %     disp(k)
+    %     disp(avg_modes_hf)
     end
     
-    w_sorted = w(:,clustLabels_lf(:,k));
-    
-    %compute time-series projections onto lf modes
-    bt = diag(b)*exp(Omega*t);
-    lf_res{k}.bt = bt;
-    
-    for j = 1:rank_lf
-        sorted_modes_lf{j,k} = w_sorted(:,j);
-        avg_modes_lf(:,j) = avg_modes_lf(:,j) + w_sorted(:,j);
+    % LF
+    if (goodSplits(k) == 1) || (goodSplits(k) == 0.75)
+        w = lf_res{k}.w;
+        b = lf_res{k}.b;
+        Omega = lf_res{k}.Omega;
+        t = lf_res{k}.t;
+
+        if isempty(w)
+            continue
+        end
+
+        w_sorted = w(:,clustLabels_lf(:,k));
+
+        %compute time-series projections onto lf modes
+        bt = diag(b)*exp(Omega*t);
+        lf_res{k}.bt = bt;
+
+        for j = 1:rank_lf
+            sorted_modes_lf{j,k} = w_sorted(:,j);
+            avg_modes_lf(:,j) = avg_modes_lf(:,j) + w_sorted(:,j);
+        end
     end
 end
 
-avg_modes_hf = avg_modes_hf/nnz(goodSplits);
-avg_modes_lf = avg_modes_lf/nnz(goodSplits);
+avg_modes_hf = avg_modes_hf/splitCountHF;
+avg_modes_lf = avg_modes_lf/splitCountLF;
 
 for j = 1:rank_hf %normalize
     avg_modes_hf(:,j) = avg_modes_hf(:,j)/norm(avg_modes_hf(:,j));
@@ -359,15 +451,19 @@ legend('Im[b_1(t)]','Im[b_2(t)]','Location','eastoutside');
 
 %% Compute (Windowed) Projections onto HF Modes
 window_size = size(hf_res{1}.x,2);
-nGoodWind = nnz(goodSplits);
 % b_hf_comb = zeros(1,nGoodWind*window_size);
 % b_hf_comb_dt = zeros(1,nGoodWind*window_size);
-b_hf_comb = zeros(1,nSteps);
-b_hf_comb_dt = zeros(1,nSteps);
+b_hf_comb = zeros(1,size(t_full,2));
+b_hf_comb_dt = zeros(1,size(t_full,2));
 % t_good = zeros(1,nGoodWind*window_size);
 splitCount = 0;
 for k = 1:nSplit
-    if goodSplits(k) < 1
+    if badSplits(k) == 1
+        b_hf_comb_dt((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
+        b_hf_comb((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
+        continue
+    end
+    if (goodSplits(k) == 0) || (goodSplits(k) == 0.75) %if error on the HF split
         b_hf_comb_dt((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
         b_hf_comb((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
         continue
@@ -438,7 +534,6 @@ save('hf_sindy_data_2_td.mat','hf_bt','t_good','t_full','goodSplits','w_sorted_c
 
 %% Compute (Windowed) Projections onto LF Modes
 window_size = size(lf_res{1}.x,2);
-nGoodWind = nnz(goodSplits);
 % b_lf_comb = zeros(1,nGoodWind*window_size);
 % b_lf_comb_dt = zeros(1,nGoodWind*window_size);
 b_lf_comb = zeros(1,nSteps);
@@ -446,7 +541,12 @@ b_lf_comb_dt = zeros(1,nSteps);
 % t_good = zeros(1,nGoodWind*window_size);
 splitCount = 0;
 for k = 1:nSplit
-    if goodSplits(k) < 1
+    if badSplits(k) == 1
+        b_lf_comb_dt((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
+        b_lf_comb((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
+        continue
+    end
+    if (goodSplits(k) == 0) || (goodSplits(k) == 0.25) %if error on the LF split
         b_lf_comb_dt((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
         b_lf_comb((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
         continue

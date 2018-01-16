@@ -1,7 +1,7 @@
 clear; close all; clc
 
 addpath('../../altmany-export_fig-9ac0917');
-addpath('optdmd-master');
+% addpath('optdmd-master');
 %addpath(genpath(fullfile('..','..','Optimized DMD','optdmd-master')));
 load('../raw_data_2.mat');
 
@@ -28,58 +28,61 @@ nLevels = 5;
 nComponents = 2;
 nVars = size(x,1);
 nSteps = 2^17;
-downScale = 6; %different-sized data sets will be built from blocks of size nSteps/2^downScale
+wSteps = 2^10;
+nSplit = floor(nSteps/wSteps);
 
-if mod(nSteps * 2^(-downScale) * 2^(-(nLevels-1)),2) ~= 0
-    print('Error: nSteps not sufficiently divisible by 2')
-    return;
-end
+use_last_freq = 0; %use previous spectrum as guess for next window of dmd
 
-primeList = primes(2^downScale);
-primeList = [primeList(2:end) 2^downScale]; %remove superfluous 2 and add 2^downScale
+% primeList = primes(2^downScale);
+% primeList = [primeList(2:end) 2^downScale]; %remove superfluous 2 and add 2^downScale
+% 
+% primeList = primeList(end-4:end); %don't need to go to smallest sample sizes w/ such a long time series input
 
-primeList = primeList(end-4:end); %don't need to go to smallest sample sizes w/ such a long time series input
+primeList = 1;
 
 %% OptDMD
 
-mr_res = cell(length(primeList),nLevels,2^(nLevels-1));
+mr_res = cell(length(primeList),nSplit);
 res_list = [];
 for pn = 1:length(primeList)
-    sampleSteps = nSteps * primeList(pn) / 2^(downScale);
-    xSample = x(:,1:sampleSteps);
-    tSample = TimeSpan(1:sampleSteps);
+    xSample = x(:,1:nSteps);
+    tSample = TimeSpan(1:nSteps);
     
     nHold = 0;
+    xL = reshape(xSample, nVars, wSteps, nSplit);
+    tL = reshape(tSample, 1, wSteps, nSplit);
 
-    for n = (1:nLevels)+4
-        nSplit = 2^(n-1);
-        xL = reshape(xSample, nVars, sampleSteps/nSplit, nSplit);
-        tL = reshape(tSample, 1, sampleSteps/nSplit, nSplit);
-        
-        res_list = [res_list; pn, n, nSplit, sampleSteps/nSplit];
-        for k = 1:nSplit
-            xT = xL(:,:,k);
-            tT = tL(:,:,k);
-            mr_res{pn,n,k}.x = xT;
-            mr_res{pn,n,k}.t = tT;
-            try
+    res_list = [res_list; pn, nSplit, wSteps];
+    clear('e_init')
+    for k = 1:nSplit
+        xT = xL(:,:,k);
+        tT = tL(:,:,k);
+        mr_res{pn,k}.x = xT;
+        mr_res{pn,k}.t = tT;
+        try
+            c = mean(xT,2);
+            xT = xT - repmat(c,1,size(xT,2));
+            if (exist('e_init','var')) && (use_last_freq == 1)
+                [w, e, b] = optdmd(xT,tT,r,imode,[],e_init);
+            else
                 [w, e, b] = optdmd(xT,tT,r,imode);
-            catch ME
-                disp(['Error on pn = ' num2str(pn) ', n = ' num2str(n) ', k = ' num2str(k)]);
-                continue
             end
-%             Omega = log(diag(e))/(TimeSpan(2) - TimeSpan(1));
-            mr_res{pn,n,k}.w = w;
-            mr_res{pn,n,k}.Omega = e;
-            mr_res{pn,n,k}.b = b;
-%             mr_res{pn,n,k}.Omega = Omega;
+        catch ME
+            disp(['Error on pn = ' num2str(pn) ', k = ' num2str(k)]);
+            continue
         end
-    %     nHold = input('Subtract off how many modes?')
+%             Omega = log(diag(e))/(TimeSpan(2) - TimeSpan(1));
+        e_init = e;
+        mr_res{pn,k}.c = c;
+        mr_res{pn,k}.w = w;
+        mr_res{pn,k}.Omega = e;
+        mr_res{pn,k}.b = b;
+%             mr_res{pn,k}.Omega = Omega;
     end
 end
 
 % mr_res_stack = reshape(mr_res,length(primeList)*nLevels*2^(nLevels-1),1,1);
-res_list = sortrows(res_list,4,'descend');
+% res_list = sortrows(res_list,4,'descend');
 
 
 %% Cluster Frequencies
@@ -89,8 +92,6 @@ if exist('mr_res','var') == 0
     load('res_list_2_td.mat');
 end
 
-nBins = 64;
-
 thresh_pct = 0.8;
 
 % gmmList = cell(size(res_list,1),1);
@@ -98,12 +99,8 @@ kmList = zeros(size(res_list,1),nComponents);
 
 for q = 1:size(res_list,1)
 % for q = 16
-    j = res_list(q,2);
-    pn = res_list(q,1);
-    nSplit = 2^(j-1);
-    sampleSteps = nSteps * primeList(pn) / 2^(downScale);
-    steps_per_window = sampleSteps/nSplit;
-    om_spec = zeros(nVars,sampleSteps);
+    pn = primeList(q);
+    om_spec = zeros(nVars,nSteps);
     
     all_om = [];
     
@@ -111,7 +108,7 @@ for q = 1:size(res_list,1)
 %         w = mr_res{pn,j,k}.w;
 %         b = mr_res{pn,j,k}.b;
         try
-            Omega = mr_res{pn,j,k}.Omega;
+            Omega = mr_res{pn,k}.Omega;
         catch ME
             disp(['Error on q = ' num2str(q) ', k = ' num2str(k)]);
             continue
@@ -153,7 +150,7 @@ for q = 1:size(res_list,1)
 %     confList = [];
     for k = 1:nSplit
         try
-            omega = mr_res{pn,j,k}.Omega;
+            omega = mr_res{pn,k}.Omega;
         catch ME
             continue
         end
@@ -166,7 +163,7 @@ for q = 1:size(res_list,1)
 %         om_class = sortInd(clust_res);
 %         post_res = posterior(gmm, om_sq);
 %         om_post = post_res(:,sortInd);
-        mr_res{pn,j,k}.om_class = om_class;
+        mr_res{pn,k}.om_class = om_class;
 %         mr_res{pn,j,k}.om_post = om_post;
 %         confList = [confList; max(om_post,[],2)];
     end
@@ -210,16 +207,12 @@ nBins = 64;
 
 % for q = 1:size(res_list,1)
 % for q = [4 11 17]
-for q = [16 17]
+for q = 1
     figure('units','pixels','Position',[100 100 1200 400])
-    j = res_list(q,2);
-    pn = res_list(q,1);
-    nSplit = 2^(j-1);
-    sampleSteps = nSteps * primeList(pn) / 2^(downScale);
-    steps_per_window = sampleSteps/nSplit;
-    om_spec = zeros(r,sampleSteps);
-    omIm_spec = zeros(r,sampleSteps);
-    b_spec = zeros(r,sampleSteps);
+    steps_per_window = wSteps;
+    om_spec = zeros(r,nSteps);
+    omIm_spec = zeros(r,nSteps);
+    b_spec = zeros(r,nSteps);
 %     scrollsubplot(plotDims(1),plotDims(2),[plotDims(2)*q-1, plotDims(2)*q]);
     subplot(plotDims(1),plotDims(2),[plotDims(2)-1, plotDims(2)]);
     plot(t_PoT,real(x_PoT),'k-') %plot ground truth
@@ -234,7 +227,7 @@ for q = [16 17]
     
     for k = 1:nSplit
         try
-            Omega = mr_res{pn,j,k}.Omega;
+            Omega = mr_res{pn,k}.Omega;
         catch ME
             continue
         end
@@ -273,23 +266,23 @@ for q = [16 17]
     
     for k = 1:nSplit
         try
-            w = mr_res{pn,j,k}.w;
+            w = mr_res{pn,k}.w;
         catch ME
             continue
         end
-%         e = mr_res{pn,j,k}.e;
-        b = mr_res{pn,j,k}.b;
-        Omega = mr_res{pn,j,k}.Omega;
+        b = mr_res{pn,k}.b;
+        Omega = mr_res{pn,k}.Omega;
+        c = mr_res{pn,k}.c;
         
 %         if isempty(gmmList{q}) == 0
 %             om_class = mr_res{pn,j,k}.om_class;
 %         end
         try
-            om_class = mr_res{pn,j,k}.om_class;
+            om_class = mr_res{pn,k}.om_class;
         catch ME
             continue
         end
-        t = mr_res{pn,j,k}.t;
+        t = mr_res{pn,k}.t;
         tShift = t-t(1); %compute each segment of xr starting at "t = 0"
         t_nudge = 5;
         
@@ -393,7 +386,7 @@ for q = [16 17]
 %         end
         
 %         xr_window = w*diag(b)*exp(Omega*tShift);
-        xr_window = w*diag(b)*exp(Omega*t);
+        xr_window = w*diag(b)*exp(Omega*t) + c;
 
         
 %         scrollsubplot(plotDims(1),plotDims(2),plotDims(2)*q-1:plotDims(2)*q);
@@ -427,7 +420,7 @@ for q = [16 17]
 %         hold on
     end
     for k = 1:nSplit %plot dotted lines between time splits
-        t = mr_res{pn,j,k}.t;
+        t = mr_res{pn,k}.t;
 %         scrollsubplot(plotDims(1),plotDims(2),plotDims(2)*q-3);
         subplot(plotDims(1),plotDims(2),plotDims(2)-3);
     	plot([t(end) t(end)],get(gca, 'YLim'),'k:')
