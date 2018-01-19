@@ -453,19 +453,21 @@ legend('Im[b_1(t)]','Im[b_2(t)]','Location','eastoutside');
 window_size = size(hf_res{1}.x,2);
 % b_hf_comb = zeros(1,nGoodWind*window_size);
 % b_hf_comb_dt = zeros(1,nGoodWind*window_size);
-b_hf_comb = zeros(1,size(t_full,2));
-b_hf_comb_dt = zeros(1,size(t_full,2));
+b_hf_comb = zeros(2,size(t_full,2));
+b_hf_comb_dt = zeros(2,size(t_full,2));
 % t_good = zeros(1,nGoodWind*window_size);
 splitCount = 0;
 for k = 1:nSplit
     if badSplits(k) == 1
         b_hf_comb_dt((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
         b_hf_comb((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
+        disp(['Skipping k = ' num2str(k) ', badSplits'])
         continue
     end
     if (goodSplits(k) == 0) || (goodSplits(k) == 0.75) %if error on the HF split
         b_hf_comb_dt((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
         b_hf_comb((k-1)*window_size + 1 : k*window_size) = NaN(1,window_size);
+        disp(['Skipping k = ' num2str(k) ', goodSplits'])
         continue
     end
     splitCount = splitCount + 1;
@@ -475,29 +477,43 @@ for k = 1:nSplit
     bt = hf_res{k}.bt;
     w_sorted = w(:,clustLabels_hf(:,k));
     
-    %assume the 2 HF modes are complex conjugates, combine into one real
-    %vector
-    w_sorted_comb = (w_sorted(:,1) + w_sorted(:,2))/2;
-    w_sorted_comb = abs(w_sorted_comb)/norm(w_sorted_comb); % strip any residual imaginary part & normalize
-%     disp(w_sorted_comb)
-%     phase_rot = angle(w_sorted(1,1));
-%     w_sorted = w_sorted .* exp(-sqrt(-1)*phase_rot);
-    
-%     b = w_sorted.' * x;
-%     b_hf_full(:,(k-1)*window_size + 1 : k*window_size) = b;
+    %assume the 4 HF modes are complex conjugates, combine into two real
+    %vectors
+    eq_tol = 0.01; %tolerance on norm differences below which vectors are deemed equal
 
-%     b_comb = w_sorted_comb.' * x;
-    b_comb = real(sum(bt)); %real() is just to strip off any errant imaginary residue
-%     b_hf_comb((splitCount-1)*window_size + 1 : splitCount*window_size) = b_comb;
-    b_hf_comb((k-1)*window_size + 1 : k*window_size) = b_comb;
+    w_sorted_comb = [];
+    comb_list = [];
+    b_comb = [];
+    for wi = 1:size(w_sorted,2)-1
+        for wj = wi+1:size(w_sorted,2)
+            if norm(w_sorted(:,wi)-conj(w_sorted(:,wj))) < eq_tol
+                w_sorted_comb = [w_sorted_comb (1/2)*(w_sorted(:,wi) + w_sorted(:,wj))];
+                b_comb = [b_comb; (1/2)*real(sum(bt([wi wj],:)))];
+                comb_list = [comb_list wi wj];
+            end
+        end
+    end
+    for wi = 1:size(w_sorted,2)
+        if nnz(wi == comb_list) == 0 %if wi wasn't part of a conjugate pair
+            w_sorted_comb = [w_sorted_comb w_sorted(:,wi)];
+            b_comb = [b_comb; bt(wi,:)];
+        end
+    end
+% 
+    if size(b_comb,1) ~= size(b_hf_comb,1) %force same # combined modes on all windows
+        disp(['Skipping k = ' num2str(k) ', bad conj pairs'])
+        continue
+    end
+
+    b_hf_comb(:,(k-1)*window_size + 1 : k*window_size) = b_comb;
     
     b_comb_dt = zeros(size(b_comb));
-    b_comb_dt(2:end-1) = (b_comb(3:end) - b_comb(1:end-2))/(2*(t(2)-t(1)));
-    b_comb_dt(1) = (b_comb(2) - b_comb(1))/(t(2)-t(1));
-    b_comb_dt(end) = (b_comb(end) - b_comb(end-1))/(t(2)-t(1));
+    b_comb_dt(:,2:end-1) = (b_comb(:,3:end) - b_comb(:,1:end-2))/(2*(t(2)-t(1)));
+    b_comb_dt(:,1) = (b_comb(:,2) - b_comb(:,1))/(t(2)-t(1));
+    b_comb_dt(:,end) = (b_comb(:,end) - b_comb(:,end-1))/(t(2)-t(1));
 
 %     b_hf_comb_dt((splitCount-1)*window_size + 1 : splitCount*window_size) = b_comb_dt;
-    b_hf_comb_dt((k-1)*window_size + 1 : k*window_size) = b_comb_dt;
+    b_hf_comb_dt(:,(k-1)*window_size + 1 : k*window_size) = b_comb_dt;
 
     t_good((splitCount-1)*window_size + 1 : splitCount*window_size) = t;
     %     disp(w_sorted)

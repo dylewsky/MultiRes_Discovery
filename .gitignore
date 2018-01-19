@@ -2,6 +2,13 @@
 *.mat
 *.asv
 *.pdf
+*.eps
+*.png
+*.fig
+*.aux
+*.log
+*.synctex.gz
+
 /SINDy_utils/*
 /Optimized DMD/*
 /Tao Example/altmany-export_fig-9ac0917/*
