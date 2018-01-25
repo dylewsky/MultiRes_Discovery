@@ -1,17 +1,21 @@
-function xr = example2_tdDMD_plot(x,TimeSpan,wSteps,nSplit,r,mr_res,kmList,thresh_pct,nComponents,outFile) %if outFile is empty, no export
+function xr = example2_tdDMD_plot(x,TimeSpan,wSteps,nSplit,r,mr_res,kmList,thresh_pct,nComponents,downsample,outFile) %if outFile is empty, no export
     %% Plot MultiRes Results
     addpath('../../altmany-export_fig-9ac0917');
     
+    x = x(:,1:downsample:end);
+    TimeSpan = TimeSpan(1:downsample:end);
+    
     pn = 1;
+    wSteps = floor(wSteps/downsample);
     nSteps = wSteps * nSplit;
     logScale = 0;
-
+    
     % figure('units','pixels','Position',[0 0 1366 2*768])
 
     % plotDims = [3 4]; %rows, columns of plot grid on screen at a given time
     plotDims = [1 4]; %rows, columns of plot grid on screen at a given time
     colorList = {'b','r','g','k','y'};
-
+    
     x_PoT = x(:,1:nSteps);
     t_PoT = TimeSpan(1:nSteps);
     xr = zeros(size(x_PoT));
@@ -59,7 +63,7 @@ function xr = example2_tdDMD_plot(x,TimeSpan,wSteps,nSplit,r,mr_res,kmList,thres
         subplot(plotDims(1),plotDims(2),plotDims(2)-2);
         om_hist = histogram(all_om_sq,nBins);
         mesh_pad = 10;
-        bin_mesh = om_hist.BinEdges(1)-mesh_pad:0.5:om_hist.BinEdges(end)+mesh_pad;
+%         bin_mesh = om_hist.BinEdges(1)-mesh_pad:0.5:om_hist.BinEdges(end)+mesh_pad;
         xlabel('|\omega|^2');
         ylabel('Count');
         hold on
@@ -89,6 +93,7 @@ function xr = example2_tdDMD_plot(x,TimeSpan,wSteps,nSplit,r,mr_res,kmList,thres
                 continue
             end
             t = mr_res{pn,k}.t;
+            t = t(1:downsample:end);
             tShift = t-t(1); %compute each segment of xr starting at "t = 0"
             t_nudge = 5;
 
