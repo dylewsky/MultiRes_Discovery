@@ -26,13 +26,14 @@ stepSize = 100;
 
 nSlide = floor((nSteps-wSteps)/stepSize);
 
+save('mwDMD_params.mat','r','nComponents','use_last_freq','wSteps','nSplit','nSteps','nVars','thresh_pct','stepSize','nSlide');
 
 %% execute optDMD
 
 corner_sharpness = 64; %higher = sharper corners
 lv_kern = tanh(corner_sharpness*(1:wSteps)/wSteps) - tanh(corner_sharpness*((1:wSteps)-wSteps)/wSteps) - 1;
 
-mr_res = cell(nSlide);
+mr_res = cell(nSlide,1);
 for k = 1:nSlide
     sampleStart = stepSize*(k-1) + 1;
     sampleSteps = sampleStart : sampleStart + wSteps - 1;
@@ -323,6 +324,8 @@ for k = 2:nSlide
     rBound.XData = [mr_res{k}.t(end) mr_res{k}.t(end)];
     pause(0.05)
 end
+
+save('mwDMD_allModes.mat','allModes','allFreqs');
 
 %% Times series of mode coordinates
 figure('units','pixels','Position',[100 100 1366 768])
