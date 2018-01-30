@@ -184,9 +184,11 @@ save('raw_data_2_hiRes.mat','x','TimeSpan')
 
 %%
 figure
+load('raw_data_2_hiRes.mat')
 plot(TimeSpan,x,'b', 'LineWidth', 1.5)
 hold on
-load('raw_data_2_hiRes.mat')
+load('raw_data_2_hiRes_linear.mat')
 plot(TimeSpan,x,'k', 'LineWidth', 1.5)
 xlim([TimeSpan(1) TimeSpan(end)])
 title('Linear (Black) vs. Nonlinear (Blue)')
+save('gcf','linear_vs_nonlinear_plot.png');

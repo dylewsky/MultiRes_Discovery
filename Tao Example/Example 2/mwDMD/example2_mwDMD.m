@@ -2,7 +2,14 @@ clear; close all; clc
 
 % addpath('altmany-export_fig-9ac0917');
 addpath('optdmd-master');
-load('../raw_data_2_hiRes.mat');
+
+nonlinear = 1; %toggle use of linear vs. nonlinear input data
+
+if nonlinear == 0
+    load('../raw_data_2_hiRes_linear.mat');
+else
+    load('../raw_data_2_hiRes.mat');
+end
 
 
 r = size(x,1); %rank to fit w/ optdmd
@@ -13,7 +20,7 @@ imode = 1; %parameter for optdmd code
 %      columns in varargin{2})
 
 nComponents = 2;
-use_last_freq = 1;
+use_last_freq = 0;
 
 wSteps = 11000;
 nSplit = 20; %number of windows if they were non-overlapping
@@ -30,7 +37,7 @@ save('mwDMD_params.mat','r','nComponents','use_last_freq','wSteps','nSplit','nSt
 
 %% execute optDMD
 
-corner_sharpness = 64; %higher = sharper corners
+corner_sharpness = 16; %higher = sharper corners
 lv_kern = tanh(corner_sharpness*(1:wSteps)/wSteps) - tanh(corner_sharpness*((1:wSteps)-wSteps)/wSteps) - 1;
 
 mr_res = cell(nSlide,1);
@@ -41,11 +48,13 @@ for k = 1:nSlide
     tSample = TimeSpan(sampleSteps);
 
     mr_res{k}.x = xSample;
-    xSample = xSample.*repmat(lv_kern,nVars,1); %round off corners
     mr_res{k}.t = tSample;
     
-    c = mean(xSample,2);
+    c = mean(xSample,2); %subtract off mean before rounding corners
     xSample = xSample - repmat(c,1,size(xSample,2));
+    
+    xSample = xSample.*repmat(lv_kern,nVars,1); %round off corners
+    
     t_start = tSample(1);
     tSample = tSample - t_start;
     if (exist('e_init','var')) && (use_last_freq == 1)
@@ -65,7 +74,11 @@ end
 %% Cluster Frequencies
 close all;
 if exist('mr_res','var') == 0
-    load('mwDMD_mr_res.mat');
+    if nonlinear == 0
+        load('mwDMD_mr_res_linear.mat');
+    else
+        load('mwDMD_mr_res.mat');
+    end
 end
 
 % nBins = 64;
@@ -109,13 +122,25 @@ for k = 1:nSlide
 
     mr_res{k}.om_class = om_class;
 end
-save('mwDMD_mr_res.mat', 'mr_res');    
+if exist('mr_res','var') == 0
+    if nonlinear == 0
+        save('mwDMD_mr_res_linear.mat', 'mr_res');
+    else
+        save('mwDMD_mr_res.mat', 'mr_res');
+    end
+end
+
+   
 
 
 %% Plot MultiRes Results
 close all;
 if exist('mr_res','var') == 0
-    load('mwDMD_mr_res.mat');
+    if nonlinear == 0
+        load('mwDMD_mr_res_linear.mat');
+    else
+        load('mwDMD_mr_res.mat');
+    end
 end
 
 export_result = 0;
@@ -243,7 +268,11 @@ end
 
 %% Visualize Modes
 if exist('mr_res','var') == 0
-    load('mwDMD_mr_res.mat');
+    if nonlinear == 0
+        load('mwDMD_mr_res_linear.mat');
+    else
+        load('mwDMD_mr_res.mat');
+    end
 end
 
 allModes = zeros(nSlide,r,r);
@@ -272,9 +301,9 @@ colorlist = {'k','r','b','g'};
 w = mr_res{k}.w;
 wPlots = cell(r,r);
 wTrails = cell(r,r);
-trailLength = 10; %in steps
+trailLength = 1000; %in window steps
 % Plot time series
-subplot(4,4,5:16)
+subplot(2,4,5:8)
 plot(TimeSpan(1:nSteps),x(:,1:nSteps),'LineWidth',1.5)
 xlim([TimeSpan(1) TimeSpan(nSteps)])
 hold on
@@ -285,23 +314,27 @@ hold on
 
 % Plot 1st frame
 for dim = 1:r
-    subplot(4,4,dim)
+    subplot(2,4,dim)
     wi = w(dim,:);
     for j = 1:r
         wPlots{dim,j} = plot(real(wi(j)),imag(wi(j)),'o','Color',colorlist{j},'MarkerSize',7);
         hold on
-        wTrails{dim,j} = plot(real(wi(j)),imag(wi(j)),'-','Color',colorlist{j},'LineWidth',0.2);
+        wTrails{dim,j} = plot(real(wi(j)),imag(wi(j)),'-','Color',colorlist{j},'LineWidth',0.1);
         hold on
+        wTrails{dim,j}.Color(4) = 0.3; % 50% opacity
     end
     title(['Proj. Modes into Dimension ' num2str(dim)])
     axis equal
     xlim([-1 1])
     ylim([-1 1])
+    xlabel('Real');
+    ylabel('Imag');
     plot(xlim,[0 0],'k:')
     hold on
     plot([0 0],ylim,'k:')
     hold off
 end
+legend([wPlots{r,1},wPlots{r,2},wPlots{r,3},wPlots{r,4}],{'LF Mode 1','LF Mode 2','HF Mode 1','HF Mode 2'},'Position',[0.93 0.65 0.05 0.2])
 %Plot subsequent frames
 for k = 2:nSlide
     w = mr_res{k}.w;
