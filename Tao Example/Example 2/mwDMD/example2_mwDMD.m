@@ -243,7 +243,7 @@ for k = 1:nSlide
 end
 
 subplot(2,2,4);
-plot(t_PoT,real(x_PoT),'k-') %plot ground truth
+plot(t_PoT,real(x_PoT),'k-','LineWidth',1.5) %plot ground truth
 xlabel('t')
 ylabel('Measurement Data')
 xMax = max(max(abs(x_PoT)));
@@ -251,7 +251,7 @@ ylim(1.5*[-xMax, xMax]);
 hold on
 
 xr = xr./repmat(xn.',4,1); %weight xr so all steps are on equal footing
-plot(t_PoT,real(xr),'b-') %plot averaged reconstruction
+plot(t_PoT,real(xr),'b-','LineWidth',1.5) %plot averaged reconstruction
 title('Input (Black); DMD Recon. (Blue)');
 
 
@@ -296,7 +296,7 @@ for k = 2:nSlide
 end
 meanFreqsSq = sum(allFreqs.*conj(allFreqs),1)/nSlide;
 
-figure('units','pixels','Position',[100 100 1366 768])
+figure('units','pixels','Position',[0 0 1366 768])
 colorlist = {'k','r','b','g'};
 w = mr_res{k}.w;
 wPlots = cell(r,r);
