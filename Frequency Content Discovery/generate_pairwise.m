@@ -1,8 +1,9 @@
 clear variables; close all; clc
 
-N = 100;
-fBounds = [1 100];
-freqs = linspace(fBounds(1),fBounds(2),N);
+N = 100; %must be even
+fBounds = [2 100];
+freqs = linspace(fBounds(1),fBounds(2),N/2);
+freqs = repelem(freqs,1,2);
 
 % amps = ones(1,N);
 amps = randn(1,N);
@@ -23,4 +24,4 @@ t = 0:tStep:tMax;
 
 X = repmat(amps.',1,length(t)).*sin(freqs.' * t + phases.');
 
-save('uniform_data.mat','X','t','N','freqs');
+save('pairwise_data.mat','X','t','N','freqs');
