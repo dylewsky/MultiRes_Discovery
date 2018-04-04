@@ -157,23 +157,20 @@ for k = 1:nSlide
 
     mr_res{k}.om_class = om_class;
 end
-if exist('mr_res','var') == 0
-    if nonlinear == 0
-        if use_median_freqs == 0
-            save('mwDMD_mr_res_linear.mat', 'mr_res');
-        else
-            save('mwDMD_mr_res_i2_linear.mat', 'mr_res');
-        end
+
+if nonlinear == 0
+    if use_median_freqs == 0
+        save('mwDMD_mr_res_linear.mat', 'mr_res');
     else
-        if use_median_freqs == 0
-            save('mwDMD_mr_res.mat', 'mr_res');
-        else
-            save('mwDMD_mr_res_i2.mat', 'mr_res');
-        end
+        save('mwDMD_mr_res_i2_linear.mat', 'mr_res');
+    end
+else
+    if use_median_freqs == 0
+        save('mwDMD_mr_res.mat', 'mr_res');
+    else
+        save('mwDMD_mr_res_i2.mat', 'mr_res');
     end
 end
-
-   
 
 
 %% Plot MultiRes Results
@@ -317,7 +314,7 @@ if export_result == 1
     close(gcf);
 end
 
-%% Visualize Modes
+%% Link Consecutive Modes
 if exist('mr_res','var') == 0
     if nonlinear == 0
         try
@@ -342,6 +339,11 @@ modeCats(1,:) = 1:r; %label using order of 1st modes
 allModes(1,:,:) = mr_res{1}.w;
 allFreqs(1,:) = mr_res{1}.Omega;
 [~,catsAsc] = sort(mr_res{1}.Omega.*conj(mr_res{1}.Omega)); %category labels in ascending frequency order
+
+distThresh = 0;
+% distThresh = 0.11; %if more than one mode is within this distance then match using derivative
+% minDists = zeros(nSlide-1,1);
+permDistsHist = zeros(size(catList,1),nSlide-1);
 for k = 2:nSlide
     w_old = squeeze(allModes(k-1,:,:));
     w = mr_res{k}.w;
@@ -349,12 +351,107 @@ for k = 2:nSlide
     for np = 1:size(catList,1)
         permDists(np) = norm(w(:,catList(np,:))-w_old);
     end
-    [~,minCat] = min(permDists);
+    permDistsHist(:,k-1) = sort(permDists);
+%     minDists(k-1) = min(permDists);
+    if nnz(permDists <= distThresh) >= 1
+        if k == 2 %can't compute derivative 1 step back, so skip it
+            [~,minCat] = min(permDists);
+            continue;
+        end
+        w_older = squeeze(allModes(k-2,:,:));
+        [~,minInds] = sort(permDists); %minInds(1) and minInds(2) point to 2 lowest distances
+        
+        wPrime = w - w_old;
+        wPrime_old = w_old - w_older;
+        
+        for j = 1:size(wPrime,2)
+            wPrime(:,j) = wPrime(:,j)/norm(wPrime(:,j));
+            wPrime_old(:,j) = wPrime_old(:,j)/norm(wPrime_old(:,j));
+        end
+        
+        derivDists = zeros(2,1);
+        for np = 1:length(derivDists)
+            derivDists(np) = norm(wPrime(:,catList(minInds(np),:))-wPrime_old);
+        end
+        
+        [~,minDerInd] = min(derivDists);
+        derivDistsSort = sort(derivDists);
+        permDistsSort= sort(permDists);
+        disp(['Derivative-Matching on k = ' num2str(k)])
+        if (derivDistsSort(2)-derivDistsSort(1)) > (permDistsSort(2) - permDistsSort(1))
+            minCat = minInds(minDerInd);
+            [~,minCatNaive] = min(permDists);
+            if minCat ~= minCatNaive
+                disp('Naive result was wrong!')
+            end
+        else
+            [~,minCat] = min(permDists);
+            disp('Naive result trumps derivative match')
+        end
+        
+    else
+        [~,minCat] = min(permDists);
+    end
     modeCats(k,:) = catList(minCat,:);
     allModes(k,:,:) = w(:,catList(minCat,:));
     allFreqs(k,:) = mr_res{k}.Omega(catList(minCat,:));
 end
 meanFreqsSq = sum(allFreqs.*conj(allFreqs),1)/nSlide;
+
+
+if use_median_freqs == 0
+    save('mwDMD_allModes.mat','allModes','allFreqs');
+else
+    save('mwDMD_allModes_i2.mat','allModes','allFreqs');    
+end
+
+%% Second derivative of mode coordinates
+sd_norms = zeros(r,size(allModes,1)-2);
+for j = 1:r
+    tsPP = allModes(1:end-2,:,j) + allModes(3:end,:,j) - 2*allModes(2:end-1,:,j);
+    sd_norms(j,:) = vecnorm(tsPP.');
+end
+sd_norms = vecnorm(sd_norms).';
+
+sd_thresh = 0.1; %threshold above which to try different permutations to reduce 2nd deriv
+                 %can be set to 0 to just check every step
+ppOverrideRatio = 0.7; %apply new permutation if 2nd deriv is reduced by at least this factor
+   
+% figure
+% plot(sd_norms)
+% hold on
+% plot (1:length(sd_norms),sd_thresh*ones(length(sd_norms),1))
+
+for k = 2:nSlide-1
+    thisData = allModes(k-1:k+1,:,:);
+    tdPP = squeeze(thisData(1,:,:) + thisData(3,:,:) - 2*thisData(2,:,:));
+    if norm(tdPP) < sd_thresh
+        continue;
+    end
+    permDists = zeros(size(catList,1),1);
+    permData = zeros(size(thisData));
+    for np = 1:size(catList,1)
+        %hold k-1 configuration constant, permute k and k+1 registers
+        permData(1,:,:) = thisData(1,:,:);
+        permData(2:3,:,:) = thisData(2:3,:,catList(np,:));
+        permPP = squeeze(permData(1,:,:) + permData(3,:,:) - 2*permData(2,:,:));
+        permDists(np) = norm(permPP);
+        if permDists(np) <= ppOverrideRatio * norm(tdPP)
+            newCat = catList(np,:);
+            allModes(k:end,:,:) = allModes(k:end,:,newCat);
+            modeCats(k,:) = modeCats(k,newCat);
+            disp(['2nd Deriv. Perm. Override: k = ' num2str(k)]);
+        end
+    end
+end
+
+if use_median_freqs == 0
+    save('mwDMD_allModes.mat','allModes','allFreqs');
+else
+    save('mwDMD_allModes_i2.mat','allModes','allFreqs');    
+end
+
+%% Visualize Modes
 
 figure('units','pixels','Position',[0 0 1366 768])
 colorlist = {'k','r','b','g'};
@@ -417,12 +514,6 @@ for k = 2:nSlide
     pause(0.05)
 end
 
-if use_median_freqs == 0
-    save('mwDMD_allModes.mat','allModes','allFreqs');
-else
-    save('mwDMD_allModes_i2.mat','allModes','allFreqs');    
-end
-
 %% Times series of mode coordinates
 figure('units','pixels','Position',[100 100 1366 768])
 for j = 1:r
@@ -451,7 +542,7 @@ for j = 1:r
     subplot(r,2,2*j-1)
     plot(rMode)
     title(['Magnitudes of Modes in Dim. ' num2str(j)])
-    legend({'LF','LF','HF','HF'})
+    legend({'HF','HF','LF','LF'})
 %     legend('a','b','r','\theta')
     if j == r
         xlabel('Window #')
@@ -459,7 +550,7 @@ for j = 1:r
     subplot(r,2,2*j)
     plot(thMode)
     title(['Angles of Modes in Dim. ' num2str(j)])
-    legend({'LF','LF','HF','HF'})
+    legend({'HF','HF','LF','LF'})
 %     legend('a','b','r','\theta')
     if j == r
         xlabel('Window #')
@@ -483,44 +574,31 @@ plot(imag(allModes(:,:,3) - conj(allModes(:,:,4))))
 title('Im[w_3 - w_4^*]')
 
 %% Output mode time series data
-% all_freqs_sq = allFreqs .* conj(allFreqs);
-% med_high_band = median(max(all_freqs_sq,[],2));
-% 
-% ceil_pct = 1.05; %get rid of outliers w/ unnaturally high frequency
-% 
-% % ol_ind = max(all_freqs_sq,[],2) >=  ceil_pct * med_high_band;
-% ol_ind = 628:642; %manually excise outliers from DMD error
-% allFreqsCut = allFreqs;
-% allFreqsCut(ol_ind,:) = NaN;
-% 
-% t_step = (TimeSpan(2)-TimeSpan(1))*stepSize; %time per window sliding step
-% wSpan = 0:t_step:(nSlide-1)*t_step;
-% 
-% [F,TF] = fillmissing(allFreqsCut,'spline','SamplePoints',wSpan);
-% 
-% for j = 1:r
-%     figure
-%     plot(wSpan,real(allFreqsCut(:,j)),'.',wSpan(TF(:,j)),real(F(TF(:,j),j)),'o')
-%     hold on
-%     plot(wSpan,real(allFreqs(:,j)),'k:')
-%     hold off
-% %     xlim([6.1 6.6])
-% end
-% 
 t_step = (TimeSpan(2)-TimeSpan(1))*stepSize; %time per window sliding step
 start_steps = 100; %chop off from beginning to get rid of initial transients
-good_winds = [start_steps:626, 644:nSlide]; %manually excise outliers from DMD error
-cutoff_inds = 626-start_steps; %after omitting outliers, this is the index location of the cutoff between continuous regions
+% good_winds = [start_steps:626, 644:nSlide]; %manually excise outliers from DMD error
+% cutoff_inds = 626-start_steps; %after omitting outliers, this is the index location of the cutoff between continuous regions
 
-allFreqsCut = allFreqs(good_winds,:);
-allModesCut = allModes(good_winds,:,:);
+% allFreqsCut = allFreqs(good_winds,:);
+% allModesCut = allModes(good_winds,:,:);
 
-modeStack = squeeze(reshape(allModesCut,size(allModesCut,1),r*r,1));
+modeStack = zeros(size(allModes,1),r*r);
+
+for j = 1:r
+    for k = 1:r
+        modeStack(:,(j-1)*r+k) = allModes(:,k,j);
+    end
+end
+% figure
+% subplot(2,1,1)
+% plot(real(modeStack(:,1:8)))
+% subplot(2,1,2)
+% plot(real(modeStack(:,9:16)))
 
 if use_median_freqs == 0
-    save('modeSeries.mat','modeStack','t_step','cutoff_inds');
+    save('modeSeries.mat','modeStack','t_step');
 else
-    save('modeSeries_i2.mat','modeStack','t_step','cutoff_inds');
+    save('modeSeries_i2.mat','modeStack','t_step');
 end
 
 %% Split HF/LF Reconstruction
@@ -589,3 +667,25 @@ A_proj_avg = real(A_proj_avg)/nSlide;
 figure
 plot(TimeSpan(1:nSteps),v(1:nSteps,:))
 legend({'Mode 1','Mode 2','Mode 3','Mode 4'})
+
+%% Time series of mode projections
+allB = zeros(nSlide,r);
+colFreqs = zeros(r,1);
+for k = 1:nSlide
+    thisCat = modeCats(k,:);
+    b = mr_res{k}.b;
+%     b = b(thisCat);
+    allB(k,:) = b.';
+    colFreqs = colFreqs + abs(mr_res{k}.Omega);
+end
+colFreqs = colFreqs/nSlide;
+wMids = (TimeSpan(2)-TimeSpan(1))*(wSteps/2 + stepSize*(1:nSlide));
+figure
+subplot(2,1,1)
+plot(wMids,allB(:,[1 3]))
+legend({'LF','HF'});
+title('OptDMD Weight Coefficients Over Time');
+xlim([wMids(1) wMids(end)]);
+subplot(2,1,2)
+plot(TimeSpan(1:nSteps),x(:,1:nSteps))
+xlim([wMids(1) wMids(end)]);

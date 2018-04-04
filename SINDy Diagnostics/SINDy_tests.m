@@ -1,20 +1,19 @@
 clear; close all; clc
 
-addpath('../../../SINDy_utils');
+addpath('../SINDy_utils');
 
-load('modeSeries_i2.mat');
-r = 4;
+load('testData.mat');
 
-which_vars = 1; %0 = all vars, 1 = just HF, 2 = just LF
+TimeSpan = tspan;
 
-if which_vars == 1
-    modeStack = modeStack(:,1:r*r/2);
-elseif which_vars == 2
-    modeStack = modeStack(:,r*r/2+1:end);
-end
+polyorder = 1;
+usesine = 0;
 
+h = t(2)-t(1);
 
-x = modeStack.';
+%% Slow data
+
+x = y1.';
 nVars = size(x,1);
 orig_norms = zeros(nVars,1);
 for j = 1:nVars
@@ -22,16 +21,9 @@ for j = 1:nVars
     x(j,:) = x(j,:)/norm(x(j,:)); %normalize so b(t) and db/dt have equal magnitudes
 end
 
-TimeSpan = 0:t_step:(size(x,2)-1)*t_step;
 
-ODE_order = 2;
-polyorder = 1;
-usesine = 0;
 n = nVars;
 
-h = t_step;
-
-%% compute Derivative 
 xfull = x;
 TimeSpanFull = TimeSpan;
 
