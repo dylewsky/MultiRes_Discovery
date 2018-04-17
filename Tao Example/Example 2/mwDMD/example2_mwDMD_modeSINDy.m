@@ -35,10 +35,14 @@ h = t_step;
 xfull = x;
 TimeSpanFull = TimeSpan;
 
-xCrop = x(:,5:end-4);
-dxCrop = (1/(12*h)) * (x(:,1:end-4) - x(:,5:end) + 8*x(:,2:end-3) - 8*x(:,4:end-1));
-dxCrop = dxCrop(:,3:end-2);
-tCrop = TimeSpan(5:end-4);
+% xCrop = x(:,5:end-4);
+% dxCrop = (1/(12*h)) * (-x(:,1:end-4) + x(:,5:end) - 8*x(:,2:end-3) + 8*x(:,4:end-1));
+% dxCrop = dxCrop(:,3:end-2);
+% tCrop = TimeSpan(5:end-4);
+
+xCrop = x(:,2:end-1);
+dxCrop = (1/(2*h)) * (x(:,3:end) - x(:,1:end-2));
+tCrop = TimeSpan(2:end-1);
 
 
 x = xCrop.';
@@ -57,7 +61,7 @@ Theta = poolData(x,n,polyorder,usesine);
 m = size(Theta,2);
 
 %% compute Sparse regression: sequential least squares
-lambdas = 10.^(0.5 : 0.1 : 2);
+lambdas = 10.^(-0.5 : 0.1 : 1.5);
 % lambdas = 10.^(5:0.1:6);
 coeff_cts = zeros(size(lambdas));
 for lj = 1:length(lambdas)

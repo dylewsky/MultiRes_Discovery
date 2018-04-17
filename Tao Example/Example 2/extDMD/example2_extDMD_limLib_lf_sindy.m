@@ -39,8 +39,8 @@ tspan = TimeSpanFull;
 dx = zeros(size(x));
 for j=1:size(x,2)
     jf = j + 3;
-    dx(:,j) = (1/(12*h)) * (xfull(:,jf-2) - xfull(:,jf+2) + 8*xfull(:,jf+1) - 8*xfull(:,jf-1));
-%     dx(:,j) = (1/(2*h)) * (xfull(:,jf+1) - xfull(:,jf-1));
+%     dx(:,j) = (1/(12*h)) * (-xfull(:,jf-2) + xfull(:,jf+2) - 8*xfull(:,jf+1) + 8*xfull(:,jf-1));
+    dx(:,j) = (1/(2*h)) * (xfull(:,jf+1) - xfull(:,jf-1));
 end
 % dx = dx + eps*randn(size(dx));   % add noise
 

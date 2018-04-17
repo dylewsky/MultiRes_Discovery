@@ -27,10 +27,14 @@ n = nVars;
 xfull = x;
 TimeSpanFull = TimeSpan;
 
-xCrop = x(:,5:end-4);
-dxCrop = (1/(12*h)) * (x(:,1:end-4) - x(:,5:end) + 8*x(:,2:end-3) - 8*x(:,4:end-1));
-dxCrop = dxCrop(:,3:end-2);
-tCrop = TimeSpan(5:end-4);
+% xCrop = x(:,5:end-4);
+% dxCrop = (1/(12*h)) * (-x(:,1:end-4) + x(:,5:end) - 8*x(:,2:end-3) + 8*x(:,4:end-1));
+% dxCrop = dxCrop(:,3:end-2);
+% tCrop = TimeSpan(5:end-4);
+
+xCrop = x(:,2:end-1);
+dxCrop = (1/(2*h)) * (x(:,3:end) - x(:,1:end-2));
+tCrop = TimeSpan(2:end-1);
 
 
 x = xCrop.';
