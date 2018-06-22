@@ -2,19 +2,19 @@ clear; close all; clc
 
 addpath('../../../SINDy_utils');
 
-which_vars = 2; %0 = all vars, 1 = just LF, 2 = just HF
+load('modeSeries_i2.mat');
+r = 4;
 
-if which_vars == 0
-    load('diffusion_map_full.mat');
-elseif which_vars == 1
-    load('diffusion_map_lf.mat');
+which_vars = 1; %0 = all vars, 1 = just HF, 2 = just LF
+
+if which_vars == 1
+    modeStack = modeStack(:,1:r*r/2);
 elseif which_vars == 2
-    load('diffusion_map_hf.mat');
+    modeStack = modeStack(:,r*r/2+1:end);
 end
 
-r = 2;
 
-x = diffusion_map(1:r,:);
+x = modeStack.';
 nVars = size(x,1);
 orig_norms = zeros(nVars,1);
 for j = 1:nVars
@@ -22,13 +22,14 @@ for j = 1:nVars
     x(j,:) = x(j,:)/norm(x(j,:)); %normalize so b(t) and db/dt have equal magnitudes
 end
 
-TimeSpan = 0:(size(x,2)-1); %use steps as time units
-h = 1; %time step
+TimeSpan = 0:t_step:(size(x,2)-1)*t_step;
 
-polyorder = 3;
+ODE_order = 2;
+polyorder = 1;
 usesine = 0;
 n = nVars;
 
+h = t_step;
 
 %% compute Derivative 
 xfull = x;
@@ -43,11 +44,13 @@ xCrop = x(:,2:end-1);
 dxCrop = (1/(2*h)) * (x(:,3:end) - x(:,1:end-2));
 tCrop = TimeSpan(2:end-1);
 
+
 x = xCrop.';
 dx = dxCrop.';
 tspan = tCrop.';
 
 x0 = x(1,:);
+
 % figure
 % plot(real(x));
 % figure
@@ -58,7 +61,8 @@ Theta = poolData(x,n,polyorder,usesine);
 m = size(Theta,2);
 
 %% compute Sparse regression: sequential least squares
-lambdas = 10.^(0 : 0.1 : 2);
+lambdas = 10.^(-0.5 : 0.1 : 1.5);
+% lambdas = 10.^(5:0.1:6);
 coeff_cts = zeros(size(lambdas));
 for lj = 1:length(lambdas)
     testLambda = lambdas(lj);
@@ -71,12 +75,12 @@ title('Tuning the Sparse Thresholding Parameter');
 xlabel('\lambda');
 ylabel('# Nonzero Coefficients');
 grid on
-if which_vars == 0 %all
-    lambda = lambdas(5);
-elseif which_vars == 1 %lf
-    lambda = lambdas(2); 
-elseif which_vars == 2 %hf
-    lambda = lambdas(3); 
+if which_vars == 0
+    lambda = lambdas(10);
+elseif which_vars == 1 %HF
+    lambda = lambdas(6); 
+elseif which_vars == 2 %LF
+    lambda = lambdas(5); 
 end
 Xi = sparsifyDynamics(Theta,dx,lambda,n);
 figure
@@ -121,12 +125,12 @@ ylabel('x_2','FontSize',13)
 l1 = legend('True','Identified');
 
 figure
-plot(tA,xA(:,1),'r-','LineWidth',.1)
+plot(tA,xA(:,1),'r.','LineWidth',.1)
 hold on
-plot(tA,xA(:,2),'b-','LineWidth',.1)
-plot(tB(1:10:end),xB(1:10:end,1),'k-','LineWidth',1.2)
+plot(tA,xA(:,2),'b.','LineWidth',.1)
+plot(tB(1:10:end),xB(1:10:end,1),'k--','LineWidth',1.2)
 hold on
-plot(tB(1:10:end),xB(1:10:end,2),'k-','LineWidth',1.2)
+plot(tB(1:10:end),xB(1:10:end,2),'k--','LineWidth',1.2)
 xlabel('Time')
 ylabel('State, x_k')
 legend('True x_1','True x_2','Identified')
@@ -150,7 +154,7 @@ figure
 xA_rescale = xA .* repmat((orig_norms.^(-1)).', size(xA,1),1);
 xB_rescale = xB .* repmat((orig_norms.^(-1)).', size(xB,1),1);
 subplot(2,1,1)
-plot(tA,xA_rescale,'-','LineWidth',1)
+plot(tA,xA_rescale,'LineWidth',1)
 title('Input Data (Ground Truth)')% \epsilon = 0.01)')
 subplot(2,1,2)
 plot(tB,xB_rescale,'LineWidth',2)
@@ -168,8 +172,6 @@ title(['SINDy Result'])% (Obtained \epsilon = ' num2str(obtained_eps) ')'])
 %     c2 = -0.01^(-1); %true value
 %     dydt = [c1 * x(2); c2 * x(1)];
 % end
-
-return;
 
 %% Animate Results
 

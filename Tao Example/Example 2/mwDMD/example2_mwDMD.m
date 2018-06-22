@@ -605,7 +605,9 @@ end
 xr_H = zeros(size(x(:,1:nSteps)));
 xr_L = zeros(size(x(:,1:nSteps)));
 all_b = zeros(nVars,nSlide);
-xn = zeros(nSteps,1); %count # of windows contributing to each step
+xn = zeros(nSteps,1); %track total contribution from all windows to each time step
+recon_filter_sd = wSteps/8;
+recon_filter = exp(-((1 : wSteps) - (wSteps+1)/2).^2/recon_filter_sd^2);
 for k = 1:nSlide
     w = mr_res{k}.w;
     b = mr_res{k}.b;
@@ -620,9 +622,13 @@ for k = 1:nSlide
     % constant shift gets put in LF recon
     xr_L_window = w(:, om_class == 1)*diag(b(om_class == 1))*exp(Omega(om_class == 1)*(t-t_start)) + c;
     xr_H_window = w(:, om_class == 2)*diag(b(om_class == 2))*exp(Omega(om_class == 2)*(t-t_start));
+    
+    xr_L_window = xr_L_window.*repmat(recon_filter,nVars,1);
+    xr_H_window = xr_H_window.*repmat(recon_filter,nVars,1);
+    
     xr_L(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xr_L(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) + xr_L_window;
     xr_H(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xr_H(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) + xr_H_window;
-    xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) + 1;
+    xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) + recon_filter.';
 end
 xr_L = xr_L./repmat(xn.',nVars,1);
 xr_H = xr_H./repmat(xn.',nVars,1);
@@ -639,7 +645,16 @@ title('HF Recon')
 figure
 plot(all_b.')
 
-save('mwDMD_sep_recon.mat','xr_L','xr_H');
+nanCols = ~isnan([xr_H; xr_L]);
+nanCols = sum(nanCols,1) ~= 0;
+
+tspan = TimeSpan(1:nSteps);
+
+xr_H = real(xr_H(:,nanCols));
+xr_L = real(xr_L(:,nanCols));
+tspan = tspan(nanCols);
+
+save('mwDMD_sep_recon.mat','xr_L','xr_H','tspan');
 
 %% Construct A Matrices
 if global_SVD ~= 1

@@ -1,43 +1,74 @@
-clear; close all; clc
+clear variables; close all; clc
 
-addpath('../../../SINDy_utils');
+addpath('../../../../sparsedynamics/utils/')
 
-which_vars = 2; %0 = all vars, 1 = just LF, 2 = just HF
+inFile = 'mwDMD_sep_recon.mat';
+% dataLabel = 'Lorenz';
+% inFile = [dataLabel '_sindy_input.mat'];
 
-if which_vars == 0
-    load('diffusion_map_full.mat');
-elseif which_vars == 1
-    load('diffusion_map_lf.mat');
-elseif which_vars == 2
-    load('diffusion_map_hf.mat');
-end
+load(inFile);
+x = real(xr_H); %choose which regime to use
+x = x/max(max(abs(x))); %set max abs value to 1
+figure
+subplot(2,1,1)
+plot(tspan,xr_L)
+title('LF Reconstruction')
+subplot(2,1,2)
+plot(tspan,xr_H)
+title('HF Reconstruction')
 
-r = 2;
 
-x = diffusion_map(1:r,:);
 nVars = size(x,1);
-orig_norms = zeros(nVars,1);
-for j = 1:nVars
-    orig_norms(j) = norm(x(j,:));
-    x(j,:) = x(j,:)/norm(x(j,:)); %normalize so b(t) and db/dt have equal magnitudes
-end
 
-TimeSpan = 0:(size(x,2)-1); %use steps as time units
-h = 1; %time step
-
-polyorder = 3;
+polyorder = 1:3;
 usesine = 0;
-n = nVars;
 
+nTrunc = 1000; %number of steps to chop off beginning to avoid transients
+
+
+lambdas = 10.^(3 : 0.2 : 5.6);
+% lambdas = 10.^(6 : 0.2 : 10);
+lambdaIdx = 4; %which lambda to integrate on (use positive or negative index)
+
+
+
+%     TimeSpan = 0:t_step:(size(x,2)-1)*t_step;
+x = x(:,nTrunc+1:end);
+TimeSpan = tspan(nTrunc+1:end);
+
+%     ODE_order = 2;
+figure
+plot(TimeSpan,x)
+title('Input Data');
+
+
+h = TimeSpan(2)-TimeSpan(1);
+
+%% Normalize x
+% Normalize rows of x separately
+% orig_norms = ones(nVars,1);
+% for j = 1:nVars
+%     orig_norms(j) = norm(x(:,j));
+%     x(:,j) = x(:,j)/orig_norms(j); %normalize so rows of x have equal magnitudes
+% end
+
+% % Normalize all rows of x together (i.e. preserve relative magnitudes)
+% orig_norms = repmat(norm(x),nVars,1);
+% for j = 1:nVars
+%     x(:,j) = x(:,j)/orig_norms(j);
+% end
+
+% Don't normalize
+orig_norms = ones(nVars,1);
 
 %% compute Derivative 
 xfull = x;
 TimeSpanFull = TimeSpan;
 
-% xCrop = x(:,5:end-4);
-% dxCrop = (1/(12*h)) * (-x(:,1:end-4) + x(:,5:end) - 8*x(:,2:end-3) + 8*x(:,4:end-1));
-% dxCrop = dxCrop(:,3:end-2);
-% tCrop = TimeSpan(5:end-4);
+%     xCrop = x(:,5:end-4);
+%     dxCrop = (1/(12*h)) * (-x(:,1:end-4) + x(:,5:end) - 8*x(:,2:end-3) + 8*x(:,4:end-1));
+%     dxCrop = dxCrop(:,3:end-2);
+%     tCrop = TimeSpan(5:end-4);
 
 xCrop = x(:,2:end-1);
 dxCrop = (1/(2*h)) * (x(:,3:end) - x(:,1:end-2));
@@ -47,89 +78,89 @@ x = xCrop.';
 dx = dxCrop.';
 tspan = tCrop.';
 
+
 x0 = x(1,:);
+
 % figure
 % plot(real(x));
 % figure
 % plot(real(dx));
 
 %% pool Data  (i.e., build library of nonlinear time series)
-Theta = poolData(x,n,polyorder,usesine);
+Theta = poolData(x,nVars,polyorder,usesine);
 m = size(Theta,2);
 
+%% Normalize columns of Theta
+meanNorm = 0;
+ThetaNorms = ones(size(Theta,2),1);
+% for tc = 1:size(Theta,2)
+%     meanNorm = meanNorm + norm(Theta(:,tc));
+%     ThetaNorms(tc) = norm(Theta(:,tc));
+%     Theta(:,tc) = Theta(:,tc)/ThetaNorms(tc);
+% end
+% meanNorm = meanNorm/size(Theta,2);
+% % Theta = Theta * meanNorm; 
+
 %% compute Sparse regression: sequential least squares
-lambdas = 10.^(0 : 0.1 : 2);
-coeff_cts = zeros(size(lambdas));
+    
+coeff_cts = zeros(length(lambdas),nVars);
 for lj = 1:length(lambdas)
     testLambda = lambdas(lj);
-    Xi = sparsifyDynamics(Theta,dx,testLambda,n);
-    coeff_cts(lj) = nnz(Xi);
+    Xi = sparsifyDynamics(Theta,dx,testLambda,nVars);
+    for li = 1:nVars
+        coeff_cts(lj,li) = nnz(Xi(:,li));
+    end
 end
+
+
 figure
-semilogx(lambdas,coeff_cts,'*','LineWidth',2)
-title('Tuning the Sparse Thresholding Parameter');
+for li = 1:nVars
+    semilogx(lambdas,coeff_cts(:,li),'*-','LineWidth',2,'DisplayName',['# Terms: x' num2str(li)])
+    hold on
+end
+title('Tuning \lambda');
 xlabel('\lambda');
 ylabel('# Nonzero Coefficients');
+legend
+ylim([0 max(max(coeff_cts))+1])
 grid on
-if which_vars == 0 %all
-    lambda = lambdas(5);
-elseif which_vars == 1 %lf
-    lambda = lambdas(2); 
-elseif which_vars == 2 %hf
-    lambda = lambdas(3); 
-end
-Xi = sparsifyDynamics(Theta,dx,lambda,n);
-figure
-spy(Xi)
 hold on
-if which_vars == 0
-    plot([0 0],[0.5 1.5],'w-',[0 0],[1.5 5.5],'k-',[0 0],[5.5 9.5],'r-',[0 0],[9.5 13.5],'b-',[0 0],[13.5 17.5],'g-','LineWidth',5)
-    plot([1.5 5.5]-1,[0 0],'k-',[5.5 9.5]-1,[0 0],'r-',[9.5 13.5]-1,[0 0],'b-',[13.5 17.5]-1,[0 0],'g-','LineWidth',5)
-elseif which_vars == 1
-    plot([0 0],[0.5 1.5],'w-',[0 0],[1.5 5.5],'k-',[0 0],[5.5 9.5],'r-','LineWidth',5)
-    plot([1.5 5.5]-1,[0 0],'k-',[5.5 9.5]-1,[0 0],'r-','LineWidth',5)
-elseif which_vars == 2
-    plot([0 0],[0.5 1.5],'w-',[0 0],[1.5 5.5],'b-',[0 0],[5.5 9.5],'g-','LineWidth',5)
-    plot([1.5 5.5]-1,[0 0],'b-',[5.5 9.5]-1,[0 0],'g-','LineWidth',5)
+
+
+if lambdaIdx > 0
+    lambda = lambdas(lambdaIdx);
+    cct = coeff_cts(lambdaIdx);
+else
+    lambda = lambdas(end+lambdaIdx);
+    cct = coeff_cts(end+lambdaIdx);
 end
+
+%highlight chosen lambda
+plot([lambda lambda], [0 max(max(coeff_cts))+1],'k:','LineWidth',2,'DisplayName','Chosen \lambda');
+hold off
+
+%% recompute regression for chosen lambda
+
+Xi = sparsifyDynamics(Theta,dx,lambda,nVars);
+Xi = Xi./repmat(ThetaNorms,1,nVars); %undo Theta normalization for coefficients
+
+
+
+%     %% integrate true and identified systems
+%     options = odeset('RelTol',1e-10,'AbsTol',1e-10*ones(1,n));
+% 
+%     [tB,xB]=ode45(@(t,x)sparseGalerkin(t,x,Xi,polyorder,usesine),tspan,x0,options);  % approximate
+% 
+%     sindy_res{wn}.t_recon = tB;
+%     sindy_res{wn}.x_recon = xB;
     
-ylabel('Coefficients')
-xlabel('Dotted Variable')
-% set(gca,'YTickLabel',stringLib(:,1))
-% stringLibList = stringLib{:,1};
-% gca.YTickLabel = stringLib(:,1);
-
-
-
-%% integrate true and identified systems
-options = odeset('RelTol',1e-10,'AbsTol',1e-10*ones(1,n));
-
-[tB,xB]=ode45(@(t,x)sparseGalerkin(t,x,Xi,polyorder,usesine),tspan,x0,options);  % approximate
+    
 
 %% FIGURES!!
+
 tA = tspan;
 xA = x;
-
-figure
-dtA = [0; diff(tA)];
-plot(xA(:,1),xA(:,2),'r.','LineWidth',.1);
-hold on
-dtB = [0; diff(tB)];
-plot(xB(:,1),xB(:,2),'k--','LineWidth',1.2);
-xlabel('x_1','FontSize',13)
-ylabel('x_2','FontSize',13)
-l1 = legend('True','Identified');
-
-figure
-plot(tA,xA(:,1),'r-','LineWidth',.1)
-hold on
-plot(tA,xA(:,2),'b-','LineWidth',.1)
-plot(tB(1:10:end),xB(1:10:end,1),'k-','LineWidth',1.2)
-hold on
-plot(tB(1:10:end),xB(1:10:end,2),'k-','LineWidth',1.2)
-xlabel('Time')
-ylabel('State, x_k')
-legend('True x_1','True x_2','Identified')
+% Xi = Xi;
 
 stringLib = libStringsFixed(nVars,polyorder,usesine).';
 stringLib = repmat(stringLib, 1, nVars);
@@ -141,19 +172,53 @@ for nd = 1:nVars
     for j = 1:length(coeffsUsed)
         disp([num2str(coeffsUsed(j)) ' ' stringLibUsed{j}]);
     end
+    disp(' ') %line break
 end
 
-%%
+% options = odeset('RelTol',1e-7,'AbsTol',1e-7*ones(1,n));
+options = odeset('RelTol',1e-6);
+
+[tB,xB]=ode45(@(t,x)sparseGalerkin(t,x,Xi,polyorder,usesine),tspan,x0,options);  % approximate
+
+figure
+dtA = [0; diff(tA)];
+plot_xA = plot3(xA(:,1),xA(:,2),xA(:,3),'r','LineWidth',1.5);
+hold on
+dtB = [0; diff(tB)];
+plot_xB = plot3(xB(:,1),xB(:,2),xB(:,3),'k','LineWidth',1.5);
+hold off
+plot_xA.Color(4) = 0.3; % opacity
+plot_xB.Color(4) = 0.3; % opacity
+xlabel('x_1','FontSize',13)
+ylabel('x_2','FontSize',13)
+zlabel('x_3','FontSize',13)
+l1 = legend('True','Identified');
+title('Manifolds: True vs. Identified')
+
+% figure
+% plot(tA,xA(:,1),'r','LineWidth',1.2)
+% hold on
+% plot(tA,xA(:,2),'r','LineWidth',1.2)
+% plot(tB(1:10:end),xB(1:10:end,1),'k','LineWidth',1.2)
+% hold on
+% plot(tB(1:10:end),xB(1:10:end,2),'k','LineWidth',1.2)
+% xlabel('Time')
+% ylabel('State, x_k')
+% legend('True x_1','True x_2','Identified x_1','Identified x_2')
+% title('Time Series: True vs. Identified')
+
+
+%% Plot Time Series
 % [test_t, test_x] = ode45(@test_fn,[tspan(1) tspan(end)],[x(1,1) x(1,2)]);
 % obtained_eps = ((abs(coeffsUsed(2)) * orig_norms(2)) / (abs(coeffsUsed(1)) * orig_norms(1))).^(-2);
 figure
 xA_rescale = xA .* repmat((orig_norms.^(-1)).', size(xA,1),1);
 xB_rescale = xB .* repmat((orig_norms.^(-1)).', size(xB,1),1);
 subplot(2,1,1)
-plot(tA,xA_rescale,'-','LineWidth',1)
+plot(tA,xA_rescale,'LineWidth',1)
 title('Input Data (Ground Truth)')% \epsilon = 0.01)')
 subplot(2,1,2)
-plot(tB,xB_rescale,'LineWidth',2)
+plot(tB,xB_rescale,'LineWidth',1)
 title(['SINDy Result'])% (Obtained \epsilon = ' num2str(obtained_eps) ')'])
 
 % plot(test_t,test_x)
@@ -173,17 +238,6 @@ return;
 
 %% Animate Results
 
-if which_vars == 0
-    rr = r;
-    colorlist = {'k','r','b','g'};
-else
-    rr = r/2; %reduced rank for hf/lf
-    if which_vars == 1
-        colorlist = {'k','r'};
-    elseif which_vars == 2
-        colorlist = {'b','g'};
-    end
-end
 
 figure('units','pixels','Position',[0 0 1366 768])
 % first frame
