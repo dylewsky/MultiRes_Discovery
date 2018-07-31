@@ -44,7 +44,7 @@ for j = 1:length(test_windows)
         end
         xr_comp = real(xr_comp);
         
-        subplot(nComponents,3,3*k-2)
+        subplot(nComponents,4,4*(k-1)+1)
         plot(t_test,xr_sep{k}(:,steps_test),'k-','DisplayName','Full DMD Recon.')
         title(['DMD Forecast at t = ' num2str(t_test(1)) ': Component ' num2str(k)]);
         hold on
@@ -59,14 +59,16 @@ for j = 1:length(test_windows)
         
         t_train = t_test(1:wSteps);
         xr_train = xr_sep{k}(:,steps_test(1:wSteps));
+        xr_mean = mean(xr_train,2);
+        xr_train = xr_train - xr_mean;
         pc = cell(nVars,1); %polynomial fit coefficients for each variable
         poly_forecast = cell(nVars,1);
         for vi = 1:nVars
             pc{vi} = polyfit(t_train,xr_train(vi,:),poly_fit_order);
-            poly_forecast{vi} = polyval(pc{vi},t_test);
+            poly_forecast{vi} = polyval(pc{vi},t_test) + xr_mean(vi);
         end
         yBounds = ylim;
-        subplot(nComponents,3,3*k-1)
+        subplot(nComponents,4,4*(k-1)+2)
         plot(t_test,xr_sep{k}(:,steps_test),'k-','DisplayName','Full DMD Recon.')
         title(['Polynomial Forecast at t = ' num2str(t_test(1)) ': Component ' num2str(k)]);
         hold on
@@ -79,7 +81,7 @@ for j = 1:length(test_windows)
         xlim([t_test(1) t_test(end)])
         ylim(yBounds)
         
-        % HAVOK Forecast
+        %Global HAVOK Forecast
         
         load(['MR_HAVOK_model_' num2str(k) '.mat']);
         x0 = zeros(nDelay*size(xr_sep{k},1),1);
@@ -95,11 +97,54 @@ for j = 1:length(test_windows)
         [tHAV, vHAV] = ode45(@(tHAV,vHAV)HAVOK_rhs(vHAV,A),t_test(wSteps-1:end),v0);
         xHAV = U(:,1:r-1) * S(1:r-1,1:r-1) * vHAV.';
         xHAV = xHAV(1:nVars,:);
-        subplot(nComponents,3,3*k)
+        subplot(nComponents,4,4*(k-1)+3)
         plot(t_test,xr_sep{k}(:,steps_test),'k-','DisplayName','Full DMD Recon.')
-        title(['HAVOK Forecast at t = ' num2str(t_test(1)) ': Component ' num2str(k)]);
+        title(['Global HAVOK Forecast at t = ' num2str(t_test(1)) ': Component ' num2str(k)]);
         hold on
         plot(tHAV,xHAV,'r-','DisplayName','HAVOK Forecast')
+        hold on
+        plot([t_test(wSteps) t_test(wSteps)],ylim,'k--','DisplayName','Boundary Between Window and Future')
+        hold off
+        xlim([t_test(1) t_test(end)])
+        ylim(yBounds)
+        
+        % Local HAVOK Forecast
+        
+        % EIGEN-TIME DELAY COORDINATES
+        Hloc = zeros(nVars*nDelay,length(steps_test)-(nDelay-1)*delaySteps);
+        for hk=1:nDelay
+            delayInds = ((hk-1)*nVars + 1) : hk*nVars;
+            Hloc(delayInds,:) = xr_sep{k}(:,(hk-1)*delaySteps+1:(length(steps_test)-(nDelay)*delaySteps + hk*delaySteps));
+        end
+
+        [Uloc,Sloc,Vloc] = svd(Hloc,'econ'); % Eigen delay coordinates
+
+        % COMPUTE DERIVATIVES (4TH ORDER CENTRAL DIFFERENCE)
+        dVloc = zeros(length(Vloc)-5,r);
+        for i=3:length(Vloc)-3
+            for hk=1:r
+                dVloc(i-2,hk) = (1/(12 * dt)) * (-Vloc(i+2,hk)+8 * Vloc(i+1,hk)-8 * Vloc(i-1,hk)+Vloc(i-2,hk));
+            end
+        end
+        % trim first and last two that are lost in derivative
+        Vloc = Vloc(3:end-3,1:r);
+
+        % BUILD HAVOK REGRESSION MODEL ON TIME DELAY COORDINATES
+        XiLoc = Vloc\dVloc;
+        Aloc = XiLoc(1:r-1,1:r-1)';
+        Bloc = XiLoc(end,1:r-1)';
+        
+        v0loc = Sloc^(-1) * Uloc.' * x0; %transform into eigenbasis used by HAVOK model
+        v0loc = v0loc(1:r-1); %...up to rank used by HAVOK model
+
+        [tHAVloc, vHAVloc] = ode45(@(tHAVloc,vHAVloc)HAVOK_rhs(vHAVloc,Aloc),t_test(wSteps-1:end),v0loc);
+        xHAVloc = Uloc(:,1:r-1) * Sloc(1:r-1,1:r-1) * vHAVloc.';
+        xHAVloc = xHAVloc(1:nVars,:);
+        subplot(nComponents,4,4*(k-1)+4)
+        plot(t_test,xr_sep{k}(:,steps_test),'k-','DisplayName','Full DMD Recon.')
+        title(['Local HAVOK Forecast at t = ' num2str(t_test(1)) ': Component ' num2str(k)]);
+        hold on
+        plot(tHAVloc,xHAVloc,'r-','DisplayName','HAVOK Forecast')
         hold on
         plot([t_test(wSteps) t_test(wSteps)],ylim,'k--','DisplayName','Boundary Between Window and Future')
         hold off

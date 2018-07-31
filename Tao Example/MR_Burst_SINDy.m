@@ -10,27 +10,26 @@ differentiation_method = 1; % 1 = standard central-difference, 2 = TV Regularize
 smoothing = 0; %toggle smoothing of input data
 lowpass = 0;
 
-% %% Initialize: Example 3 (untransformed x,y variables)
+%% Initialize: Example 3 (untransformed x,y variables)
 % 
-% % % Use HF mrDMD reconstruction
-% % inFile = 'Example 3/mwDMD/mwDMD_sep_recon.mat';
-% % load(inFile);
-% % y = real(xr_H); %start with HF dynamics
-% % lambdas = 10.^(1 : 0.2 : 4);
-% % lambdaIdx = 6; %which lambda to integrate on (use positive or negative index)
-% % useSVD = 1;
-% % svdRank = 2;
-% 
-% 
-% % Use LF mrDMD reconstruction
+% % Use HF mrDMD reconstruction
 % inFile = 'Example 3/mwDMD/mwDMD_sep_recon.mat';
 % load(inFile);
-% y = real(xr_L); %start with HF dynamics
-% lambdas = 10.^(1.5 : 0.1 : 3.5);
-% lambdaIdx = 12; %which lambda to integrate on (use positive or negative index)
+% y = real(xr_H); %start with HF dynamics
+% lambdas = 10.^(1 : 0.2 : 4);
+% lambdaIdx = 6; %which lambda to integrate on (use positive or negative index)
 % useSVD = 1;
 % svdRank = 2;
-% 
+
+% Use LF mrDMD reconstruction
+inFile = 'Example 3/mwDMD/mwDMD_sep_recon.mat';
+load(inFile);
+y = real(xr_L); %start with HF dynamics
+lambdas = 10.^(1.5 : 0.1 : 3.5);
+lambdaIdx = [12 5]; %which lambda to integrate on (use positive or negative index)
+useSVD = 1;
+svdRank = 2;
+
 % 
 % % % Use original y variables
 % % inFile = 'Example 3/raw_data_3_hiRes.mat';
@@ -43,10 +42,10 @@ lowpass = 0;
 % % svdRank = 2;
 % % % 
 % % 
-% load('Example 3/mwDMD/mwDMD_params.mat')
-% nTrunc = [wSteps wSteps]; %number of steps to chop off beginning/end to avoid transients and differentiation artifacts
-% burstSize = 10000; %points per burst sample
-% burstSep = 12000; %steps between starts of consecutive bursts
+load('Example 3/mwDMD/mwDMD_params.mat')
+nTrunc = [wSteps wSteps]; %number of steps to chop off beginning/end to avoid transients and differentiation artifacts
+burstSize = 10000; %points per burst sample
+burstSep = 12000; %steps between starts of consecutive bursts
 
 
 %% Initialize: Example 2 (transformed a, b, r,theta variables)
@@ -75,11 +74,11 @@ lowpass = 0;
 % load(inFile);
 % y = real(xr_L); %start with HF dynamics
 % lambdas = 10.^(2.5 : 0.1 : 4.5);
-% lambdaIdx = 20; %which lambda to integrate on (use positive or negative index)
+% lambdaIdx = [8 7]; %which lambda to integrate on (use positive or negative index)
 % useSVD = 1;
 % svdRank = 2;
-
-
+% 
+% % 
 % load('Example 2/mwDMD/mwDMD_params.mat');
 % nTrunc = [wSteps wSteps];
 % burstSize = 10000; %points per burst sample
@@ -109,30 +108,30 @@ lowpass = 0;
 % 
 
 %% Initialize: 3 Body System Example
-inFile = '3 Body Example/mwDMD_sep_recon.mat';
-load(inFile);
-load('3 Body Example/mwDMD_params.mat');
-downSample = 100; %downsample factor; no need for superhigh resolution for the slow variables
-for j = 1:length(xr_sep)
-    xr_sep{j} = xr_sep{j}(:,1:downSample:end);
-end
-tspan = tspan(1:downSample:end);
-
-nTrunc = ceil([wSteps wSteps]/downSample);
-burstSize = ceil(200000/downSample); %points per burst sample
-burstSep = ceil(250000/downSample); %steps between starts of consecutive bursts
-
-% Orbital 
-y = real(xr_sep{1});
-% lambdas = 10.^(0.5 : 0.1 : 2.5);
-% lambdaIdx = [9 7 12 17]; %which lambda to integrate on (use positive or negative index)
-% lambdas = 10.^(0 : 0.1 : 2);
-% lambdaIdx = [13 9 8 4];
-lambdas = 10.^(-1 : 0.1 : 1);
-lambdaIdx = [17 16 11 13];
-useSVD = 1;
-svdRank = 4;
-lowpass = 1;
+% inFile = '3 Body Example/mwDMD_sep_recon.mat';
+% load(inFile);
+% load('3 Body Example/mwDMD_params.mat');
+% downSample = 100; %downsample factor; no need for superhigh resolution for the slow variables
+% for j = 1:length(xr_sep)
+%     xr_sep{j} = xr_sep{j}(:,1:downSample:end);
+% end
+% tspan = tspan(1:downSample:end);
+% 
+% nTrunc = ceil([wSteps wSteps]/downSample);
+% burstSize = ceil(200000/downSample); %points per burst sample
+% burstSep = ceil(250000/downSample); %steps between starts of consecutive bursts
+% 
+% % Orbital 
+% y = real(xr_sep{1});
+% % lambdas = 10.^(0.5 : 0.1 : 2.5);
+% % lambdaIdx = [9 7 12 17]; %which lambda to integrate on (use positive or negative index)
+% % lambdas = 10.^(0 : 0.1 : 2);
+% % lambdaIdx = [13 9 8 4];
+% lambdas = 10.^(-1 : 0.1 : 1);
+% lambdaIdx = [17 16 11 13];
+% useSVD = 1;
+% svdRank = 4;
+% lowpass = 1;
 
 % % Saturn 
 % y = real(xr_sep{2});

@@ -173,7 +173,6 @@ else
     end
 end
 
-
 %% Plot MultiRes Results
 close all;
 if exist('mr_res','var') == 0
