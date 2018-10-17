@@ -138,5 +138,7 @@ for mrComponent = 1:nComponents
     %% Save Model
     outFile = ['MR_HAVOK_model_' num2str(mrComponent) '.mat'];
     lowpass = useLowpass(mrComponent);
+    U = U(:,1:r);
+    S = S(1:r,1:r);
     save(fullfile(dataDir,outFile),'A','B','nDelay','delaySteps','dt','r','U','S','lowpass');
 end
