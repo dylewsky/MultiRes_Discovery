@@ -18,16 +18,17 @@ co = [0.4940    0.1840    0.5560;
 set(groot,'defaultAxesColorOrder',co)
 
 % Figure
+load('fig_size_in.mat')
 load('example4_raw_data.mat');
 load('example4_mwDMD_params.mat');
 figure
 % set(gcf, 'Units', 'Inches', 'Position', [0, 0, 27/8, 3], 'PaperUnits', 'Inches', 'PaperSize', [8.5 11])
-set(gcf, 'Units', 'Inches', 'Position', [1, 1, 5, 4])
-plot([TimeSpan(1) TimeSpan(end)],[0 0],'k-')
+set(gcf, 'Units', 'Inches', 'Position', fig_size_in)
+plot([TimeSpan(1) TimeSpan(end)],[0 0],'k-','LineWidth',0.5)
 hold on
-plot(TimeSpan,x,'LineWidth',1.5);
+plot(TimeSpan,x,'LineWidth',1.3);
 xlim([TimeSpan(1) TimeSpan(end)]);
-xlabel('Time (s)')
+xlabel('Time')
 % set(gca,'YTickLabel','')
 % title('Simple Multiscale Model')
 set(gca,'FontSize',fSize)%,'FontWeight','bold')
@@ -87,4 +88,4 @@ annotation('textbox',[0.15 0.14 0.2 0.15],...
 % set(curlyBrace,'Rotation',90)
 curlyBrace = drawbrace([2 -5.6],[18 -5.6]);
 set(curlyBrace,'Color','k','LineWidth',1)
-export_fig '../moving_window' -pdf -eps;
+export_fig '../moving_window' -pdf -eps -transparent;
