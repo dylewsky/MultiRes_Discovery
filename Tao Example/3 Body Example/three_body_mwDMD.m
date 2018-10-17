@@ -595,6 +595,7 @@ xn = zeros(nSteps,1); %track total contribution from all windows to each time st
 % analysis
 recon_filter_sd = wSteps/8; %std dev of gaussian filter
 recon_filter = exp(-((1 : wSteps) - (wSteps+1)/2).^2/recon_filter_sd^2);
+save('recon_gaussian_filter.mat','recon_filter','recon_filter_sd');
 for k = 1:nSlide
     w = mr_res{k}.w;
     b = mr_res{k}.b;
