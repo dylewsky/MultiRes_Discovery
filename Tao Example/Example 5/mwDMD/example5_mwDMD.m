@@ -2,6 +2,7 @@ clear; close all; clc
 
 % addpath('altmany-export_fig-9ac0917');
 addpath('optdmd-master');
+addpath(fullfile('optdmd-master','src'));
 
 
 load('../raw_data_5.mat');
@@ -26,17 +27,22 @@ if global_SVD == 1
     v = v(:,1:r);
 end
 
-initialize_artificially = 0; %this is required for use_last_freq OR use_median_freqs
+initialize_artificially = 1; %this is required for use_last_freq OR use_median_freqs
 use_last_freq = 0; 
-use_median_freqs = 0; %mutually exclusive w/ use_last_freq
+use_median_freqs = 1; %mutually exclusive w/ use_last_freq
+
+optDMD_opts = varpro_opts('ifprint',0); %disable verbose output for optDMD
 
 if (initialize_artificially == 1) && (use_median_freqs == 1)
     load('km_centroids.mat');
     freq_meds = repelem(sqrt(km_centroids),r/nComponents);
 end
 
-wSteps = 25000;
+% wSteps = 1600;
+wSteps = 7000;
+
 nSplit = floor(length(TimeSpan)/wSteps); %number of windows if they were non-overlapping
+% nSplit = 2;
 nSteps = wSteps * nSplit;
 nVars = size(x,1);
 thresh_pct = 1;
@@ -54,7 +60,8 @@ corner_sharpness = 16; %higher = sharper corners
 lv_kern = tanh(corner_sharpness*(1:wSteps)/wSteps) - tanh(corner_sharpness*((1:wSteps)-wSteps)/wSteps) - 1;
 
 mr_res = cell(nSlide,1);
-parfor k = 1:nSlide
+for k = 1:nSlide
+    disp(['k = ' num2str(k) ' / ' num2str(nSlide)])
     sampleStart = stepSize*(k-1) + 1;
     sampleSteps = sampleStart : sampleStart + wSteps - 1;
     xSample = x(:,sampleSteps);
@@ -75,9 +82,9 @@ parfor k = 1:nSlide
         u = u(:,1:r);
     end
     if (exist('e_init','var')) && (initialize_artificially == 1)
-        [w, e, b] = optdmd(xSample,tSample,r,imode,[],e_init,u);
+        [w, e, b] = optdmd(xSample,tSample,r,imode,optDMD_opts,e_init,u);
     else
-        [w, e, b] = optdmd(xSample,tSample,r,imode,[],[],u);
+        [w, e, b] = optdmd(xSample,tSample,r,imode,optDMD_opts,[],u);
     end
     if use_last_freq == 1
         e_init = e;
@@ -92,24 +99,19 @@ parfor k = 1:nSlide
     mr_res{k}.b = b;
     mr_res{k}.c = c;
     mr_res{k}.t_start = t_start;
+    if mod(k,500) == 0
+        save('mr_res_temp.mat','mr_res','k','-v7.3');
+    end
 end
 
 
 %% Cluster Frequencies
 close all;
 if exist('mr_res','var') == 0
-    if nonlinear == 0
-        try
-            load('mwDMD_mr_res_i2_linear.mat');
-        catch ME
-            load('mwDMD_mr_res_linear.mat');
-        end
-    else
-        try
-            load('mwDMD_mr_res_i2.mat');
-        catch ME
-            load('mwDMD_mr_res.mat');
-        end
+    try
+        load('mwDMD_mr_res_i2.mat');
+    catch ME
+        load('mwDMD_mr_res.mat');
     end
 end
 
@@ -155,35 +157,23 @@ for k = 1:nSlide
     mr_res{k}.om_class = om_class;
 end
 
-if nonlinear == 0
-    if use_median_freqs == 0
-        save('mwDMD_mr_res_linear.mat', 'mr_res');
-    else
-        save('mwDMD_mr_res_i2_linear.mat', 'mr_res');
-    end
+
+if use_median_freqs == 0
+    save('mwDMD_mr_res.mat', 'mr_res','-v7.3');
+    save('km_centroids.mat','km_centroids');
 else
-    if use_median_freqs == 0
-        save('mwDMD_mr_res.mat', 'mr_res');
-    else
-        save('mwDMD_mr_res_i2.mat', 'mr_res');
-    end
+    save('mwDMD_mr_res_i2.mat', 'mr_res','-v7.3');
+    save('km_centroids_i2.mat','km_centroids');
 end
+
 
 %% Plot MultiRes Results
 close all;
 if exist('mr_res','var') == 0
-    if nonlinear == 0
-        try
-            load('mwDMD_mr_res_i2_linear.mat');
-        catch ME
-            load('mwDMD_mr_res_linear.mat');
-        end
-    else
-        try
-            load('mwDMD_mr_res_i2.mat');
-        catch ME
-            load('mwDMD_mr_res.mat');
-        end
+    try
+        load('mwDMD_mr_res_i2.mat');
+    catch ME
+        load('mwDMD_mr_res.mat');
     end
 end
 
@@ -248,8 +238,10 @@ for k = 1:nSlide
     tShift = t-t(1); %compute each segment of xr starting at "t = 0"
 %     t_nudge = 5;
     xr_window = w*diag(b)*exp(Omega*(t-t_start)) + c;
+    xn_window = all(~isnan(xr_window)); %NaNs don't contribute
+    xr_window(:,any(isnan(xr_window))) = 0;
     xr(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xr(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) + xr_window;
-    xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) + 1;
+    xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) + xn_window.';
 
     % Plot |omega|^2 spectrum
     om_sq = conj(Omega).*Omega;
@@ -289,8 +281,8 @@ for k = 1:nSlide
         end
         hold on
     end
-    title('|\omega|^2 Spectra (Moving Window)');
 end
+title('|\omega|^2 Spectra (Moving Window)');
 
 subplot(2,2,4);
 plot(t_PoT,real(x_PoT),'k-','LineWidth',1.5) %plot ground truth
@@ -318,18 +310,10 @@ end
 
 %% Link Consecutive Modes
 if exist('mr_res','var') == 0
-    if nonlinear == 0
-        try
-            load('mwDMD_mr_res_i2_linear.mat');
-        catch ME
-            load('mwDMD_mr_res_linear.mat');
-        end
-    else
-        try
-            load('mwDMD_mr_res_i2.mat');
-        catch ME
-            load('mwDMD_mr_res.mat');
-        end
+    try
+        load('mwDMD_mr_res_i2.mat');
+    catch ME
+        load('mwDMD_mr_res.mat');
     end
 end
 
@@ -513,7 +497,7 @@ for k = 2:nSlide
     end
     lBound.XData = [mr_res{k}.t(1) mr_res{k}.t(1)];
     rBound.XData = [mr_res{k}.t(end) mr_res{k}.t(end)];
-    pause(0.05)
+%     pause(0.05)
 end
 
 %% Times series of mode coordinates
