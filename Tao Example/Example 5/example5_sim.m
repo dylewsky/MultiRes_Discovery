@@ -2,18 +2,19 @@ clc; clear; close all;
 
 %% parameters
 
-T=48;
+T=64;
+downsample_factor = 2; %integer >= 1
 
-x0 = [1 0];
-tau1 = 15;
+x0 = [-1.110,-0.125];
+tau1 = 2;
 a = 0.7;
 b = 0.8;
-Iext = 0.5;
+Iext = 0.65;
 
 y0 = [0 1];
 eta = 0; %dampling
 epsilon = 1;
-tau2 = 5;
+tau2 = 0.2;
 
 %% RK4 integration of the mixed system
 
@@ -54,6 +55,19 @@ subplot(2,1,2)
 plot(TimeSpan, y);
 title('y data')
 xlabel('Time');
+
+figure
+plot(TimeSpan(1:end-1),diff(x(:,1)),'DisplayName','x')
+hold on
+plot(TimeSpan(1:end-1),diff(y(:,1)),'DisplayName','y')
+title('Derivatives')
+legend
+
+%% downsample
+x = x(1:downsample_factor:end,:);
+y = y(1:downsample_factor:end,:);
+TimeSpan = TimeSpan(1:downsample_factor:end);
+
 
 %% 
 uv = [x(:,1) y(:,1)];
