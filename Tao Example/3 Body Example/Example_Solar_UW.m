@@ -22,7 +22,7 @@ if (size(qIC,2)==3) % initial conditions include the star (star, planet1, planet
     vIC=[PIC(:,2)/m1-(PIC(:,1)+PIC(:,2)+PIC(:,3))/(m0+m1+m2), PIC(:,3)/m2-(PIC(:,1)+PIC(:,2)+PIC(:,3))/(m0+m1+m2)];
 end
 
-T=100000;               % total simulation time, unit: year
+T=1000000;               % total simulation time, unit: year
 h=0.1;  refinement=1;   % true timestep is h/refinement, but we only store every h for the sake of storage
 
 %% Simulation in Cartesian by 4th-order symplectic integrator

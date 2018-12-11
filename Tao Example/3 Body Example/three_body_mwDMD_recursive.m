@@ -20,24 +20,29 @@ use_median_freqs = 1; %mutually exclusive w/ use_last_freq
 n_recursions = 4;
 
 rec_x = {'Three_Body_Data_Cartesian.mat',...
-    'Three_Body_Data_Slow_Downsample.mat',...
-    'Three_Body_Data_Slow_Downsample.mat',...
-    'Three_Body_Data_Slow_Downsample.mat'};
+    'mwDMD_sep_recon_recursion_01_downsample.mat',...
+    'mwDMD_sep_recon_recursion_02.mat',...
+    'mwDMD_sep_recon_recursion_03.mat'};
+rec_composite_components = {1, 1, 1, []}; %components which get subdivided in subsequent recursions
 rec_wSteps = [6000, 460, 7200, 19200];
 rec_stepSize = [300, 20, 80, 160];
 rec_nComponents = [3, 2, 2, 2];
 rec_r = 2*rec_nComponents;
 rec_initialize_artificially = [1 0 0 0];
 
+save('recursive_params.mat','n_recursions','rec_x','rec_composite_components','rec_wSteps',...
+    'rec_stepSize','rec_nComponents','rec_r','rec_initialize_artificially');
 
-for nr = 1:n_recursions
+%%
+% for nr = 1:n_recursions
+for nr = 1
     load(rec_x{nr});
-    x = pos;
+    if nr == 1
+        x = pos;
+    else
+        x = xr_sep{rec_composite_components{nr-1}}; %use redundant component of previous recursion
+    end
     TimeSpan = tspan;
-
-
-    r = size(x,1); %rank to fit w/ optdmd
-    nComponents = 3; %number of distinct time scales present
 
     wSteps = rec_wSteps(nr);
     stepSize = rec_stepSize(nr);
@@ -50,10 +55,12 @@ for nr = 1:n_recursions
         u = u(:,1:r); %just first r modes
         v = v(:,1:r);
     end
-
-    if use_median_freqs == 1
-        load(['km_centroids_' num2str(nr,'%02.f') '.mat']);
-        freq_meds = repelem(sqrt(km_centroids),r/nComponents);
+    
+    if initialize_artificially == 1
+        if use_median_freqs == 1
+            load(['km_centroids_recursion_' num2str(nr,'%02.f') '.mat']);
+            freq_meds = repelem(sqrt(km_centroids),r/nComponents);
+        end
     end
     
     nSplit = floor(length(TimeSpan)/wSteps); %number of windows if they were non-overlapping
@@ -63,7 +70,7 @@ for nr = 1:n_recursions
 
     nSlide = floor((nSteps-wSteps)/stepSize);
 
-    save(['mwDMD_params_' num2str(nr,'%02.f') '.mat'],'r','nComponents','initialize_artificially','use_last_freq','use_median_freqs','wSteps','nSplit','nSteps','nVars','thresh_pct','stepSize','nSlide');
+    save(['mwDMD_params_recursion_' num2str(nr,'%02.f') '.mat'],'r','nComponents','initialize_artificially','use_last_freq','use_median_freqs','wSteps','nSplit','nSteps','nVars','thresh_pct','stepSize','nSlide');
 
     %% execute optDMD
 
@@ -71,6 +78,7 @@ for nr = 1:n_recursions
     lv_kern = tanh(corner_sharpness*(1:wSteps)/wSteps) - tanh(corner_sharpness*((1:wSteps)-wSteps)/wSteps) - 1;
 
     mr_res = cell(nSlide,1);
+    t_starts = zeros(nSlide,1);
     for k = 1:nSlide
         sampleStart = stepSize*(k-1) + 1;
         sampleSteps = sampleStart : sampleStart + wSteps - 1;
@@ -107,19 +115,22 @@ for nr = 1:n_recursions
                 [w, e, b] = optdmd(xSample,tSample,r,imode,[],[],u);
             end
         end
-        if use_last_freq == 1
-            e_init = e;
-        end
-        if use_median_freqs == 1
-            [eSq, eInd] = sort(e.*conj(e)); %match order to that of freq_meds
-            freq_angs = angle(e(eInd));
-            e_init = exp(sqrt(-1)*freq_angs) .* freq_meds;
+        if initialize_artificially == 1
+            if use_last_freq == 1
+                e_init = e;
+            end
+            if use_median_freqs == 1
+                [eSq, eInd] = sort(e.*conj(e)); %match order to that of freq_meds
+                freq_angs = angle(e(eInd));
+                e_init = exp(sqrt(-1)*freq_angs) .* freq_meds;
+            end
         end
         mr_res{k}.w = w;
         mr_res{k}.Omega = e;
         mr_res{k}.b = b;
         mr_res{k}.c = c;
         mr_res{k}.t_start = t_start;
+        t_starts(k) = t_start;
     end
 
 
@@ -127,9 +138,9 @@ for nr = 1:n_recursions
     close all;
     if exist('mr_res','var') == 0
         try
-            load(['mwDMD_mr_res_' num2str(nr,'%02.f') '_i2.mat']);
+            load(['mwDMD_mr_res_recursion_' num2str(nr,'%02.f') '_i2.mat']);
         catch ME
-            load(['mwDMD_mr_' num2str(nr,'%02.f') '_res.mat']);
+            load(['mwDMD_mr_recursion_' num2str(nr,'%02.f') '_res.mat']);
         end
     end
 
@@ -178,9 +189,9 @@ for nr = 1:n_recursions
     %% Save mr_res
 
     if use_median_freqs == 0
-        save(['mwDMD_mr_res_' num2str(nr,'%02.f') '.mat'], 'mr_res', '-v7.3');
+        save(['mwDMD_mr_res_recursion_' num2str(nr,'%02.f') '.mat'], 'mr_res', 't_starts', '-v7.3');
     else
-        save(['mwDMD_mr_res_' num2str(nr,'%02.f') '_i2.mat'], 'mr_res', '-v7.3');
+        save(['mwDMD_mr_res_recursion_' num2str(nr,'%02.f') '_i2.mat'], 'mr_res', 't_starts', '-v7.3');
     end
 
 
@@ -188,9 +199,9 @@ for nr = 1:n_recursions
     close all;
     if exist('mr_res','var') == 0
         try
-            load('mwDMD_mr_res_i2.mat');
+            load(['mwDMD_mr_res_recursion_' num2str(nr,'%02.f') '_i2.mat']);
         catch ME
-            load('mwDMD_mr_res.mat');
+            load(['mwDMD_mr_res_recursion_' num2str(nr,'%02.f') '.mat']);
         end
     end
 
@@ -300,32 +311,32 @@ for nr = 1:n_recursions
     ylim(1.5*[-xMax, xMax]);
     hold on
 
-    xr = xr./repmat(xn.',r,1); %weight xr so all steps are on equal footing
+    xr = xr./repmat(xn.',nVars,1); %weight xr so all steps are on equal footing
     plot(t_PoT,real(xr),'b-','LineWidth',1.5) %plot averaged reconstruction
     title('Input (Black); DMD Recon. (Blue)');
 
 
-    if export_result == 1
-        if lv == 1
-            export_fig 'manyres_opt' '-pdf';
-    %             print(gcf, '-dpdf', 'manyres_opt.pdf'); 
-        else
-            export_fig 'manyres_opt' '-pdf' '-append';
-    %             print(gcf, '-dpdf', 'manyres_opt.pdf', '-append'); 
-        end
-        close(gcf);
-    end
+%     if export_result == 1
+%         if lv == 1
+%             export_fig 'manyres_opt' '-pdf';
+%     %             print(gcf, '-dpdf', 'manyres_opt.pdf'); 
+%         else
+%             export_fig 'manyres_opt' '-pdf' '-append';
+%     %             print(gcf, '-dpdf', 'manyres_opt.pdf', '-append'); 
+%         end
+%         close(gcf);
+%     end
 
     %% Link Consecutive Modes
     if exist('mr_res','var') == 0
         try
-            load('mwDMD_mr_res_i2.mat');
+            load(['mwDMD_mr_res_recursion_' num2str(nr,'%02.f') '_i2.mat']);
         catch ME
-            load('mwDMD_mr_res.mat');
+            load(['mwDMD_mr_res_recursion_' num2str(nr,'%02.f') '.mat']);
         end
     end
 
-    allModes = zeros(nSlide,r,r);
+    allModes = zeros(nSlide,nVars,r);
     allFreqs = zeros(nSlide,r);
     catList = flipud(perms(1:r));
     modeCats = zeros(nSlide,r);
@@ -394,9 +405,9 @@ for nr = 1:n_recursions
 
 
     if use_median_freqs == 0
-        save('mwDMD_allModes.mat','allModes','allFreqs');
+        save(['mwDMD_allModes_recursion_' num2str(nr,'%02.f') '.mat'],'allModes','allFreqs');
     else
-        save('mwDMD_allModes_i2.mat','allModes','allFreqs');    
+        save(['mwDMD_allModes_recursion_' num2str(nr,'%02.f') '_i2.mat'],'allModes','allFreqs');    
     end
 
     %% Second derivative of mode coordinates
@@ -440,9 +451,9 @@ for nr = 1:n_recursions
     end
 
     if use_median_freqs == 0
-        save('mwDMD_allModes.mat','allModes','allFreqs');
+        save(['mwDMD_allModes_recursion_' num2str(nr,'%02.f') '.mat'],'allModes','allFreqs');
     else
-        save('mwDMD_allModes_i2.mat','allModes','allFreqs');    
+        save(['mwDMD_allModes_recursion_' num2str(nr,'%02.f') '_i2.mat'],'allModes','allFreqs');    
     end
 
     % %% Visualize Modes
@@ -603,8 +614,9 @@ for nr = 1:n_recursions
     for j = 1:nComponents
         xr_sep{j} = zeros(size(x(:,1:nSteps)));
     end
-
-    all_b = zeros(nVars,nSlide);
+    
+    dt = mr_res{1}.t(2)-mr_res{1}.t(1);
+    all_b = zeros(r,nSlide);
     xn = zeros(nSteps,1); %track total contribution from all windows to each time step
     % Convolve each windowed reconstruction with a gaussian
     % Note that this will leave the beginning & end of time series prone to a
@@ -612,7 +624,11 @@ for nr = 1:n_recursions
     % analysis
     recon_filter_sd = wSteps/8; %std dev of gaussian filter
     recon_filter = exp(-((1 : wSteps) - (wSteps+1)/2).^2/recon_filter_sd^2);
-    save('recon_gaussian_filter.mat','recon_filter','recon_filter_sd');
+%     recon_filter_t = dt*((1:wSteps) - (wSteps+1)/2);
+%     recon_filter_windSteps = floor(min(recon_filter_t)/stepSize) : ceil(max(recon_filter_t)/stepSize);
+%     recon_filter_coarse = interp1(recon_filter_t, recon_filter)
+%     save('recon_gaussian_filter.mat','recon_filter','recon_filter_sd');
+%     window_contributions = sparse(nSteps,nSlide); %(target step, contributing window) values=fractional contributions
     for k = 1:nSlide
         w = mr_res{k}.w;
         b = mr_res{k}.b;
@@ -631,13 +647,14 @@ for nr = 1:n_recursions
         for j = 1:nComponents
             xr_sep_window{j} = w(:, om_class == j)*diag(b(om_class == j))*exp(Omega(om_class == j)*(t-t_start));
             if j == 1 % constant shift gets put in LF recon
-                xr_sep_window{j} = xr_sep_window{j} + c; 
+                xr_sep_window{j} = xr_sep_window{j} + c;
             end
             xr_sep_window{j} = xr_sep_window{j}.*repmat(recon_filter,nVars,1);
             xr_sep{j}(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xr_sep{j}(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) + xr_sep_window{j};
         end
 
         xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) + recon_filter.';
+%         window_contributions((k-1)*stepSize+1:(k-1)*stepSize+wSteps,k) = recon_filter.';
     end
     for j = 1:nComponents
         xr_sep{j} = xr_sep{j}./repmat(xn.',nVars,1);
@@ -658,7 +675,8 @@ for nr = 1:n_recursions
     end
     tspan = tspan(~nanCols);
 
-    save('mwDMD_sep_recon.mat','xr_sep','tspan','nComponents','suppress_growth');
+    save(['recon_gaussian_filter_recursion_' num2str(nr,'%02.f') '.mat'],'recon_filter','recon_filter_sd');
+    save(['mwDMD_sep_recon_recursion_' num2str(nr,'%02.f') '.mat'],'xr_sep','tspan','nComponents','suppress_growth');
 
     %% Plot Separated Reconstruction
     figure
