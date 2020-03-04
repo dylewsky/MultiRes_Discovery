@@ -10,24 +10,13 @@
 *.synctex.gz
 
 /SINDy_utils/
+/SINDy Diagnostics/
 /Optimized DMD/
-/Tao Example/altmany-export_fig-9ac0917/*
-/Tao Example/171208 Meeting Slides/*
-/Tao Example/TVRegDiff.m
 /2D Steady Navier-Stokes/
 /Navier_Stokes_Simulation/
-/Koopman Invariant Subspaces/Brunton_Invariant_Manifolds.m
-/Tao Example/Example 2/tdDMD/bin/*
-/Tao Example/Example 2/tdDMD/doc/*
-/Tao Example/Example 2/tdDMD/examples/*
-/Tao Example/Example 2/tdDMD/src/*
-/Tao Example/Example 2/tdDMD/setup.m
-/Tao Example/optdmd-master/*
-/Tao Example/Example 2/mwDMD/optdmd-master/*
-/Tao Example/Example 2/mwtdDMD/optdmd-master/*
-/Tao Example/Example 3/mwDMD/optdmd-master/*
-/Tao Example/*/*/optdmd-master/*
-/Asteroid Belt/optdmd-master/*
+/Koopman Invariant Subspaces/
+/Frequency Content Discovery/
+/Asteroid Belt/
 /*/optdmd-master/*
 /diffusion_maps-master/*
 /Tao Example/
