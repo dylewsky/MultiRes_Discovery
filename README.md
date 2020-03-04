@@ -1,6 +1,6 @@
 # MultiRes_Discovery
 
-MATLAB code demos for the paper:
+**MATLAB code demos for the paper:**
 
 "Dynamic mode decomposition for multiscale nonlinear physics"
 
