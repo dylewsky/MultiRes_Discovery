@@ -1,3 +1,0 @@
-function out = my_d2y(in)
-  out = -in ...
-      + .50*(circshift(in,[ 0, 1]) + circshift(in,[0, -1]));

@@ -1,12 +1,79 @@
-clear; close all; clc
+%%% DMD SCALE SEPARATION FOR A SIMPLE MULTISCALE TOY MODEL
+%%%
+%%% Before running, make sure to download and set up the optdmd package
+%%% available here: https://github.com/duqbo/optdmd
+%%%
+%%% This code reproduces the results of Sec. III of "Dynamic mode decomposition
+%%% for multiscale nonlinear physics," by Dylewsky, Tao, and Kutz
+%%% (DOI: 10.1103/PhysRevE.99.063311)
 
-% addpath('altmany-export_fig-9ac0917');
-addpath('optdmd-master');
-addpath(fullfile('optdmd-master','src'));
+clear variables; close all; clc
+
+%% Simulate System
+
+% parameters
+
+a0=0;   b0=0;   r0=sqrt(2^2+0.8^2); theta0=atan2(0.8,2);
+
+x1_0 = 0;
+x2_0 = 0.5;
+y1_0 = 0;
+y2_0 = 0.5;
+
+x0 = [x1_0; x2_0; y1_0; y2_0];
+
+epsilon=0.01;
+delta = 4;
+
+T=48;
 
 
-load('../raw_data_5.mat');
 
+% RK4 integration of the mixed system
+
+h=epsilon/100;
+
+TimeSpan = 0:h:T;   TimeSteps=length(TimeSpan)-1;
+
+% x = zeros(4,TimeSteps+1);
+% x(:,1) = [x1_0; x2_0; y1_0; y2_0];
+
+
+[t, x] = ode45(@(t,x) rhs(x,delta,epsilon),TimeSpan,x0);
+
+tStep = mean(diff(t))*4;
+nSteps = ceil(T/tStep);
+tN = 0:tStep:T;
+tN = tN(1:nSteps); %match to nSteps
+
+xOld = x;
+x = interp1(t,xOld,tN); %enforce evenly spaced time steps
+TimeSpan = tN;
+
+
+% Plot Results
+
+plot(TimeSpan, x);
+
+title('Raw data');
+
+xlabel('Time');
+
+% Apply Linear Mixing
+
+rng(111); %seed
+n = size(x,2);
+
+% generate a random unitary matrix M
+X = rand(n)/sqrt(2);
+[Q,R] = qr(X);
+R = diag(diag(R)./abs(diag(R)));
+M = real(Q*R);
+
+x = x * M;
+save('Simple_Toy_Model_Raw_Data.mat','x','TimeSpan','M');
+
+%% Run Sliding-Window DMD
 
 x = x.';
 
@@ -27,30 +94,35 @@ if global_SVD == 1
     v = v(:,1:r);
 end
 
-initialize_artificially = 1; %this is required for use_last_freq OR use_median_freqs
+% Method for making initial guess of DMD eigenvalues:
+
+% Recommended settings for first run:
+
+initialize_artificially = 0; %this is required for use_last_freq OR use_median_freqs
 use_last_freq = 0; 
-use_median_freqs = 1; %mutually exclusive w/ use_last_freq
+use_median_freqs = 0; %mutually exclusive w/ use_last_freq
 
-optDMD_opts = varpro_opts('ifprint',0); %disable verbose output for optDMD
+% Recommended settings for subsequent runs (using clustering information
+% obtained from the first run):
 
-if (initialize_artificially == 1) && (use_median_freqs == 1)
-    load('km_centroids.mat');
+% initialize_artificially = 1; %this is required for use_last_freq OR use_median_freqs
+% use_last_freq = 0; 
+% use_median_freqs = 1; %mutually exclusive w/ use_last_freq
+
+if use_median_freqs == 1
+    load('km_centroids.mat'); % Load pre-defined eigenvalue guesses
     freq_meds = repelem(sqrt(km_centroids),r/nComponents);
 end
 
-% wSteps = 1600;
-wSteps = 7000;
-
-nSplit = floor(length(TimeSpan)/wSteps); %number of windows if they were non-overlapping
-% nSplit = 2;
+wSteps = 5500; % Window size (in time steps)
+nSplit = 21; %number of windows if they were non-overlapping
 nSteps = wSteps * nSplit;
 nVars = size(x,1);
 thresh_pct = 1;
 
-% stepSize = wSteps/10;
 stepSize = 20;
 
-nSlide = floor((nSteps-wSteps)/stepSize);
+nSlide = floor((nSteps-wSteps)/stepSize); % Number of sliding-window iterations
 
 save('mwDMD_params.mat','r','nComponents','initialize_artificially','use_last_freq','use_median_freqs','wSteps','nSplit','nSteps','nVars','thresh_pct','stepSize','nSlide');
 
@@ -61,7 +133,6 @@ lv_kern = tanh(corner_sharpness*(1:wSteps)/wSteps) - tanh(corner_sharpness*((1:w
 
 mr_res = cell(nSlide,1);
 for k = 1:nSlide
-    disp(['k = ' num2str(k) ' / ' num2str(nSlide)])
     sampleStart = stepSize*(k-1) + 1;
     sampleSteps = sampleStart : sampleStart + wSteps - 1;
     xSample = x(:,sampleSteps);
@@ -82,9 +153,9 @@ for k = 1:nSlide
         u = u(:,1:r);
     end
     if (exist('e_init','var')) && (initialize_artificially == 1)
-        [w, e, b] = optdmd(xSample,tSample,r,imode,optDMD_opts,e_init,u);
+        [w, e, b] = optdmd(xSample,tSample,r,imode,[],e_init,u);
     else
-        [w, e, b] = optdmd(xSample,tSample,r,imode,optDMD_opts,[],u);
+        [w, e, b] = optdmd(xSample,tSample,r,imode,[],[],u);
     end
     if use_last_freq == 1
         e_init = e;
@@ -99,9 +170,6 @@ for k = 1:nSlide
     mr_res{k}.b = b;
     mr_res{k}.c = c;
     mr_res{k}.t_start = t_start;
-    if mod(k,500) == 0
-        save('mr_res_temp.mat','mr_res','k','-v7.3');
-    end
 end
 
 
@@ -114,10 +182,6 @@ if exist('mr_res','var') == 0
         load('mwDMD_mr_res.mat');
     end
 end
-
-% nBins = 64;
-
-
 
 all_om = [];
 all_om_grouped = [];
@@ -157,13 +221,10 @@ for k = 1:nSlide
     mr_res{k}.om_class = om_class;
 end
 
-
 if use_median_freqs == 0
-    save('mwDMD_mr_res.mat', 'mr_res','-v7.3');
-    save('km_centroids.mat','km_centroids');
+    save('mwDMD_mr_res.mat', 'mr_res');
 else
-    save('mwDMD_mr_res_i2.mat', 'mr_res','-v7.3');
-    save('km_centroids_i2.mat','km_centroids');
+    save('mwDMD_mr_res_i2.mat', 'mr_res');
 end
 
 
@@ -236,12 +297,9 @@ for k = 1:nSlide
     c = mr_res{k}.c;
     t_start = mr_res{k}.t_start;
     tShift = t-t(1); %compute each segment of xr starting at "t = 0"
-%     t_nudge = 5;
     xr_window = w*diag(b)*exp(Omega*(t-t_start)) + c;
-    xn_window = all(~isnan(xr_window)); %NaNs don't contribute
-    xr_window(:,any(isnan(xr_window))) = 0;
     xr(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xr(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) + xr_window;
-    xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) + xn_window.';
+    xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) + 1;
 
     % Plot |omega|^2 spectrum
     om_sq = conj(Omega).*Omega;
@@ -256,8 +314,6 @@ for k = 1:nSlide
             end
         end
     end
-%     om_window_spec = repmat(om_sq, 1, wSteps);
-%         om_spec(:,stepSize*(k-1) + 1 : stepSize*(k-1) + wSteps) = om_window_spec;
 
     subplot(2,2,2);
 
@@ -281,8 +337,8 @@ for k = 1:nSlide
         end
         hold on
     end
+    title('|\omega|^2 Spectra (Moving Window)');
 end
-title('|\omega|^2 Spectra (Moving Window)');
 
 subplot(2,2,4);
 plot(t_PoT,real(x_PoT),'k-','LineWidth',1.5) %plot ground truth
@@ -326,9 +382,7 @@ allModes(1,:,:) = mr_res{1}.w;
 allFreqs(1,:) = mr_res{1}.Omega;
 [~,catsAsc] = sort(mr_res{1}.Omega.*conj(mr_res{1}.Omega)); %category labels in ascending frequency order
 
-distThresh = 0;
-% distThresh = 0.11; %if more than one mode is within this distance then match using derivative
-% minDists = zeros(nSlide-1,1);
+distThresh = 0; %if more than one mode is within this distance then match using derivative
 permDistsHist = zeros(size(catList,1),nSlide-1);
 for k = 2:nSlide
     w_old = squeeze(allModes(k-1,:,:));
@@ -338,7 +392,6 @@ for k = 2:nSlide
         permDists(np) = norm(w(:,catList(np,:))-w_old);
     end
     permDistsHist(:,k-1) = sort(permDists);
-%     minDists(k-1) = min(permDists);
     if nnz(permDists <= distThresh) >= 1
         if k == 2 %can't compute derivative 1 step back, so skip it
             [~,minCat] = min(permDists);
@@ -403,11 +456,6 @@ sd_thresh = 0.1; %threshold above which to try different permutations to reduce 
                  %can be set to 0 to just check every step
 ppOverrideRatio = 0.7; %apply new permutation if 2nd deriv is reduced by at least this factor
    
-% figure
-% plot(sd_norms)
-% hold on
-% plot (1:length(sd_norms),sd_thresh*ones(length(sd_norms),1))
-
 for k = 2:nSlide-1
     thisData = allModes(k-1:k+1,:,:);
     tdPP = squeeze(thisData(1,:,:) + thisData(3,:,:) - 2*thisData(2,:,:));
@@ -497,7 +545,7 @@ for k = 2:nSlide
     end
     lBound.XData = [mr_res{k}.t(1) mr_res{k}.t(1)];
     rBound.XData = [mr_res{k}.t(end) mr_res{k}.t(end)];
-%     pause(0.05)
+    pause(0.05)
 end
 
 %% Times series of mode coordinates
@@ -668,7 +716,7 @@ A_proj_avg = real(A_proj_avg)/nSlide;
 figure
 plot(TimeSpan(1:nSteps),v(1:nSteps,:))
 legend({'Mode 1','Mode 2','Mode 3','Mode 4'})
-
+    
 %% Time series of mode projections
 allB = zeros(nSlide,r);
 colFreqs = zeros(r,1);
@@ -690,3 +738,9 @@ xlim([wMids(1) wMids(end)]);
 subplot(2,1,2)
 plot(TimeSpan(1:nSteps),x(:,1:nSteps))
 xlim([wMids(1) wMids(end)]);
+
+%% Function definitions
+function dx = rhs(x,delta,epsilon)
+    x1 = x(1); x2 = x(2); y1 = x(3); y2 = x(4);
+    dx=[x2; -y1^2 * x1^3; y2; -epsilon^(-1)*y1 - delta*y1^3];
+end

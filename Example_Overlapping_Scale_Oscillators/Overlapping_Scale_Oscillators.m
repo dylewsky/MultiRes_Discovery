@@ -1,15 +1,107 @@
+%%% DMD SCALE SEPARATION FOR A SYSTEM WITH SEPARATE BUT
+%%% INTERMITTANTLY-OVERLAPPING TIME SCALES
+%%%
+%%% Before running, make sure to download and set up the optdmd package
+%%% available here: https://github.com/duqbo/optdmd
+%%%
+%%% This code reproduces the results of Sec. IV of "Dynamic mode decomposition
+%%% for multiscale nonlinear physics," by Dylewsky, Tao, and Kutz
+%%% (DOI: 10.1103/PhysRevE.99.063311)
+
 clear; close all; clc
 
-% addpath('altmany-export_fig-9ac0917');
-addpath('optdmd-master');
+%% Simulate Dynamics
 
-nonlinear = 1; %toggle use of linear vs. nonlinear input data
+% parameters
 
-if nonlinear == 0
-    load('../raw_data_4_hiRes_linear.mat');
-else
-    load('../raw_data_4_hiRes.mat');
-end
+T=64;
+downsample_factor = 2; %integer >= 1
+
+x0 = [-1.110,-0.125];
+tau1 = 2;
+a = 0.7;
+b = 0.8;
+Iext = 0.65;
+
+y0 = [0 1];
+eta = 0; %dampling
+epsilon = 1;
+tau2 = 0.2;
+
+% RK4 integration of the mixed system
+
+dt = 0.0001;
+
+TimeSpan = 0:dt:T;   TimeSteps=length(TimeSpan)-1;
+
+% x = zeros(4,TimeSteps+1);
+% x(:,1) = [x1_0; x2_0; y1_0; y2_0];
+
+
+[t1, x] = ode45(@(t1,x) rhs1(x,tau1,a,b,Iext),TimeSpan,x0);
+[t2, y] = ode45(@(t2,y) rhs2(y,eta,epsilon,tau2),TimeSpan,y0);
+
+tStep = mean(diff(t1))*4;
+nSteps = ceil(T/tStep);
+tN = 0:tStep:T;
+tN = tN(1:nSteps); %match to nSteps
+
+xOld = x;
+yOld = y;
+x = interp1(t1,xOld,tN); %enforce evenly spaced time steps
+y = interp1(t2,yOld,tN); %enforce evenly spaced time steps
+TimeSpan = tN;
+
+% Plot Results
+
+figure
+subplot(2,1,1)
+plot(TimeSpan, x);
+
+title('x data');
+
+xlabel('Time');
+
+subplot(2,1,2)
+plot(TimeSpan, y);
+title('y data')
+xlabel('Time');
+
+figure
+plot(TimeSpan(1:end-1),diff(x(:,1)),'DisplayName','x')
+hold on
+plot(TimeSpan(1:end-1),diff(y(:,1)),'DisplayName','y')
+title('Derivatives')
+legend
+
+% Downsample
+x = x(1:downsample_factor:end,:);
+y = y(1:downsample_factor:end,:);
+TimeSpan = TimeSpan(1:downsample_factor:end);
+
+
+uv = [x(:,1) y(:,1)];
+
+% Apply Linear Mixing
+
+rng(123); %seed
+
+uv_ratio = 1; %ratio of u and v in linear combination
+
+n = size(uv,2);
+m = size(uv,1);
+
+nVars_out = 4; %dimension of space to map into
+
+A = randn(n,nVars_out);
+Q = orth(A.').'; %orthonormalize
+
+x = uv * A;
+plot(TimeSpan,x)
+
+save('Overlapping_Scale_Oscillators_Raw_Data.mat','x','TimeSpan','A');
+
+%% Sliding-Window DMD
 
 x = x.';
 
@@ -30,25 +122,38 @@ if global_SVD == 1
     v = v(:,1:r);
 end
 
-initialize_artificially = 1; %this is required for use_last_freq OR use_median_freqs
-use_last_freq = 0; 
-use_median_freqs = 1; %mutually exclusive w/ use_last_freq
+% Method for making initial guess of DMD eigenvalues:
 
-if use_median_freqs == 1
-    load('km_centroids.mat');
+% Recommended settings for first run:
+
+initialize_artificially = 0; %this is required for use_last_freq OR use_median_freqs
+use_last_freq = 0; 
+use_median_freqs = 0; %mutually exclusive w/ use_last_freq
+
+% Recommended settings for subsequent runs (using clustering information
+% obtained from the first run):
+
+% initialize_artificially = 1; %this is required for use_last_freq OR use_median_freqs
+% use_last_freq = 0; 
+% use_median_freqs = 1; %mutually exclusive w/ use_last_freq
+
+optDMD_opts = varpro_opts('ifprint',0); %disable verbose output for optDMD
+
+if (initialize_artificially == 1) && (use_median_freqs == 1)
+    load('km_centroids.mat'); % Load pre-defined eigenvalue guesses
     freq_meds = repelem(sqrt(km_centroids),r/nComponents);
 end
 
-wSteps = 5500;
-nSplit = 21; %number of windows if they were non-overlapping
+wSteps = 7000; % Window size (in time steps)
+
+nSplit = floor(length(TimeSpan)/wSteps); %number of windows if they were non-overlapping
 nSteps = wSteps * nSplit;
 nVars = size(x,1);
 thresh_pct = 1;
 
-% stepSize = wSteps/10;
-stepSize = 20;
+stepSize = 2;
 
-nSlide = floor((nSteps-wSteps)/stepSize);
+nSlide = floor((nSteps-wSteps)/stepSize); % Number of sliding-window iterations
 
 save('mwDMD_params.mat','r','nComponents','initialize_artificially','use_last_freq','use_median_freqs','wSteps','nSplit','nSteps','nVars','thresh_pct','stepSize','nSlide');
 
@@ -59,6 +164,7 @@ lv_kern = tanh(corner_sharpness*(1:wSteps)/wSteps) - tanh(corner_sharpness*((1:w
 
 mr_res = cell(nSlide,1);
 for k = 1:nSlide
+    disp(['k = ' num2str(k) ' / ' num2str(nSlide)])
     sampleStart = stepSize*(k-1) + 1;
     sampleSteps = sampleStart : sampleStart + wSteps - 1;
     xSample = x(:,sampleSteps);
@@ -79,9 +185,9 @@ for k = 1:nSlide
         u = u(:,1:r);
     end
     if (exist('e_init','var')) && (initialize_artificially == 1)
-        [w, e, b] = optdmd(xSample,tSample,r,imode,[],e_init,u);
+        [w, e, b] = optdmd(xSample,tSample,r,imode,optDMD_opts,e_init,u);
     else
-        [w, e, b] = optdmd(xSample,tSample,r,imode,[],[],u);
+        [w, e, b] = optdmd(xSample,tSample,r,imode,optDMD_opts,[],u);
     end
     if use_last_freq == 1
         e_init = e;
@@ -102,23 +208,12 @@ end
 %% Cluster Frequencies
 close all;
 if exist('mr_res','var') == 0
-    if nonlinear == 0
-        try
-            load('mwDMD_mr_res_i2_linear.mat');
-        catch ME
-            load('mwDMD_mr_res_linear.mat');
-        end
-    else
-        try
-            load('mwDMD_mr_res_i2.mat');
-        catch ME
-            load('mwDMD_mr_res.mat');
-        end
+    try
+        load('mwDMD_mr_res_i2.mat');
+    catch ME
+        load('mwDMD_mr_res.mat');
     end
 end
-
-% nBins = 64;
-
 
 
 all_om = [];
@@ -159,45 +254,29 @@ for k = 1:nSlide
     mr_res{k}.om_class = om_class;
 end
 
-if nonlinear == 0
-    if use_median_freqs == 0
-        save('mwDMD_mr_res_linear.mat', 'mr_res');
-    else
-        save('mwDMD_mr_res_i2_linear.mat', 'mr_res');
-    end
+
+if use_median_freqs == 0
+    save('mwDMD_mr_res.mat', 'mr_res','-v7.3');
+    save('km_centroids.mat','km_centroids');
 else
-    if use_median_freqs == 0
-        save('mwDMD_mr_res.mat', 'mr_res');
-    else
-        save('mwDMD_mr_res_i2.mat', 'mr_res');
-    end
+    save('mwDMD_mr_res_i2.mat', 'mr_res','-v7.3');
+    save('km_centroids_i2.mat','km_centroids');
 end
+
 
 %% Plot MultiRes Results
 close all;
 if exist('mr_res','var') == 0
-    if nonlinear == 0
-        try
-            load('mwDMD_mr_res_i2_linear.mat');
-        catch ME
-            load('mwDMD_mr_res_linear.mat');
-        end
-    else
-        try
-            load('mwDMD_mr_res_i2.mat');
-        catch ME
-            load('mwDMD_mr_res.mat');
-        end
+    try
+        load('mwDMD_mr_res_i2.mat');
+    catch ME
+        load('mwDMD_mr_res.mat');
     end
 end
 
 export_result = 0;
 logScale = 0;
 
-% figure('units','pixels','Position',[0 0 1366 2*768])
-
-% plotDims = [3 4]; %rows, columns of plot grid on screen at a given time
-% plotDims = [1 4]; %rows, columns of plot grid on screen at a given time
 colorList = {'b','r','g','k','y'};
     
 x_PoT = x(:,1:nSteps);
@@ -209,11 +288,7 @@ dupShift = 0; %multiplier to shift duplicate values so they can be visually dist
 nBins = 64;
 
 figure('units','pixels','Position',[100 100 1200 400])
-%     j = res_list(q,2);
-%     pn = res_list(q,1);
-%     nSplit = 2^(j-1);
 
-%     om_spec = zeros(nVars,nSteps);
 all_om = [];
 
 
@@ -250,10 +325,11 @@ for k = 1:nSlide
     c = mr_res{k}.c;
     t_start = mr_res{k}.t_start;
     tShift = t-t(1); %compute each segment of xr starting at "t = 0"
-%     t_nudge = 5;
     xr_window = w*diag(b)*exp(Omega*(t-t_start)) + c;
+    xn_window = all(~isnan(xr_window)); %NaNs don't contribute
+    xr_window(:,any(isnan(xr_window))) = 0;
     xr(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xr(:,(k-1)*stepSize+1:(k-1)*stepSize+wSteps) + xr_window;
-    xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) + 1;
+    xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) = xn((k-1)*stepSize+1:(k-1)*stepSize+wSteps) + xn_window.';
 
     % Plot |omega|^2 spectrum
     om_sq = conj(Omega).*Omega;
@@ -268,8 +344,6 @@ for k = 1:nSlide
             end
         end
     end
-%     om_window_spec = repmat(om_sq, 1, wSteps);
-%         om_spec(:,stepSize*(k-1) + 1 : stepSize*(k-1) + wSteps) = om_window_spec;
 
     subplot(2,2,2);
 
@@ -293,8 +367,8 @@ for k = 1:nSlide
         end
         hold on
     end
-    title('|\omega|^2 Spectra (Moving Window)');
 end
+title('|\omega|^2 Spectra (Moving Window)');
 
 subplot(2,2,4);
 plot(t_PoT,real(x_PoT),'k-','LineWidth',1.5) %plot ground truth
@@ -322,18 +396,10 @@ end
 
 %% Link Consecutive Modes
 if exist('mr_res','var') == 0
-    if nonlinear == 0
-        try
-            load('mwDMD_mr_res_i2_linear.mat');
-        catch ME
-            load('mwDMD_mr_res_linear.mat');
-        end
-    else
-        try
-            load('mwDMD_mr_res_i2.mat');
-        catch ME
-            load('mwDMD_mr_res.mat');
-        end
+    try
+        load('mwDMD_mr_res_i2.mat');
+    catch ME
+        load('mwDMD_mr_res.mat');
     end
 end
 
@@ -423,11 +489,6 @@ sd_thresh = 0.1; %threshold above which to try different permutations to reduce 
                  %can be set to 0 to just check every step
 ppOverrideRatio = 0.7; %apply new permutation if 2nd deriv is reduced by at least this factor
    
-% figure
-% plot(sd_norms)
-% hold on
-% plot (1:length(sd_norms),sd_thresh*ones(length(sd_norms),1))
-
 for k = 2:nSlide-1
     thisData = allModes(k-1:k+1,:,:);
     tdPP = squeeze(thisData(1,:,:) + thisData(3,:,:) - 2*thisData(2,:,:));
@@ -517,7 +578,7 @@ for k = 2:nSlide
     end
     lBound.XData = [mr_res{k}.t(1) mr_res{k}.t(1)];
     rBound.XData = [mr_res{k}.t(end) mr_res{k}.t(end)];
-    pause(0.05)
+%     pause(0.05)
 end
 
 %% Times series of mode coordinates
@@ -563,30 +624,10 @@ for j = 1:r
     end
 end
 
-%% Show how modes are reflections of one another
-figure('units','pixels','Position',[100 100 1366 768])
-subplot(2,2,1)
-plot(real(allModes(:,:,1) - conj(allModes(:,:,2))))
-title('Re[w_1 - w_2^*]')
-subplot(2,2,2)
-plot(imag(allModes(:,:,1) - conj(allModes(:,:,2))))
-title('Im[w_1 - w_2^*]')
-
-subplot(2,2,3)
-plot(real(allModes(:,:,3) - conj(allModes(:,:,4))))
-title('Re[w_3 - w_4^*]')
-subplot(2,2,4)
-plot(imag(allModes(:,:,3) - conj(allModes(:,:,4))))
-title('Im[w_3 - w_4^*]')
-
 %% Output mode time series data
 t_step = (TimeSpan(2)-TimeSpan(1))*stepSize; %time per window sliding step
 start_steps = 100; %chop off from beginning to get rid of initial transients
-% good_winds = [start_steps:626, 644:nSlide]; %manually excise outliers from DMD error
-% cutoff_inds = 626-start_steps; %after omitting outliers, this is the index location of the cutoff between continuous regions
 
-% allFreqsCut = allFreqs(good_winds,:);
-% allModesCut = allModes(good_winds,:,:);
 
 modeStack = zeros(size(allModes,1),r*r);
 
@@ -595,11 +636,6 @@ for j = 1:r
         modeStack(:,(j-1)*r+k) = allModes(:,k,j);
     end
 end
-% figure
-% subplot(2,1,1)
-% plot(real(modeStack(:,1:8)))
-% subplot(2,1,2)
-% plot(real(modeStack(:,9:16)))
 
 if use_median_freqs == 0
     save('modeSeries.mat','modeStack','t_step');
@@ -624,7 +660,6 @@ for k = 1:nSlide
     c = mr_res{k}.c;
     t_start = mr_res{k}.t_start;
     tShift = t-t(1); %compute each segment of xr starting at "t = 0"
-%     t_nudge = 5;
     % constant shift gets put in LF recon
     xr_L_window = w(:, om_class == 1)*diag(b(om_class == 1))*exp(Omega(om_class == 1)*(t-t_start)) + c;
     xr_H_window = w(:, om_class == 2)*diag(b(om_class == 2))*exp(Omega(om_class == 2)*(t-t_start));
@@ -695,7 +730,6 @@ colFreqs = zeros(r,1);
 for k = 1:nSlide
     thisCat = modeCats(k,:);
     b = mr_res{k}.b;
-%     b = b(thisCat);
     allB(k,:) = b.';
     colFreqs = colFreqs + abs(mr_res{k}.Omega);
 end
@@ -710,3 +744,20 @@ xlim([wMids(1) wMids(end)]);
 subplot(2,1,2)
 plot(TimeSpan(1:nSteps),x(:,1:nSteps))
 xlim([wMids(1) wMids(end)]);
+
+%% Function Definitions
+function dx = rhs1(x,tau,a,b,Iext)
+    % FitzHugh-Nagumo Model
+    v = x(1); w = x(2);
+    vdot = v - (v^3)/3 - w + Iext;
+    wdot = (1/tau) * (v + a - b*w);
+    dx = [vdot; wdot];
+end
+
+function dy = rhs2(y,eta,epsilon,tau)
+    % Unforced Duffing Oscillator
+    p = y(1); q = y(2);
+    pdot = q;
+    qdot = (1/tau) * (-2*eta*q - p - epsilon*p^3);
+    dy = [pdot; qdot];
+end

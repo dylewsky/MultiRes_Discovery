@@ -9,13 +9,13 @@
 *.log
 *.synctex.gz
 
-/SINDy_utils/*
-/Optimized DMD/*
+/SINDy_utils/
+/Optimized DMD/
 /Tao Example/altmany-export_fig-9ac0917/*
 /Tao Example/171208 Meeting Slides/*
 /Tao Example/TVRegDiff.m
-/2D Steady Navier-Stokes/*
-/Navier_Stokes_Simulation/*
+/2D Steady Navier-Stokes/
+/Navier_Stokes_Simulation/
 /Koopman Invariant Subspaces/Brunton_Invariant_Manifolds.m
 /Tao Example/Example 2/tdDMD/bin/*
 /Tao Example/Example 2/tdDMD/doc/*
@@ -30,8 +30,7 @@
 /Asteroid Belt/optdmd-master/*
 /*/optdmd-master/*
 /diffusion_maps-master/*
-/Paper/Figures/Data/altmany-export_fig-9ac0917/*
-/Paper/Figures/Data/kakearney-plotboxpos-pkg-96927f2/*
-/Paper/Figures/Data/drawbrace.m
-/Paper/Figures/Data/PeterRochford-MarkerTransparency-6a28bba/*
-/Paper/*
+/Tao Example/
+/Paper/
+/SIAM CSE Talk/
+/Turing RD/

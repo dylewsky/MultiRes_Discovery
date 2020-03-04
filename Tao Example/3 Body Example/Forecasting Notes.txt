@@ -1,5 +1,0 @@
-Slow-regime DMD results:
- - All windows have very low b values (weights) for the slow-scale modes
- - This is presumably because all of the slow dynamics seem to be encoded by optDMD as frequencies with positive real components
- - When I manually suppress these growth components for reconstruction purposes, I end up with negligible dynamic activity
- - Does this mean growth suppression should be baked into optDMD from the get-go? Can new b values be back-computed? 
