@@ -3,8 +3,11 @@
 MATLAB code demos for the paper:
 
 "Dynamic mode decomposition for multiscale nonlinear physics"
+
 Daniel Dylewsky, Molei Tao, and J. Nathan Kutz
+
 PHYSICAL REVIEW E 99, 063311 (2019)
+
 https://journals.aps.org/pre/abstract/10.1103/PhysRevE.99.063311
 
 **Example 1: A simple toy multiscale model**
